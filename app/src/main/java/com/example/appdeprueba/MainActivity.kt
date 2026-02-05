@@ -43,20 +43,9 @@ import androidx.navigation.compose.rememberNavController
 import com.example.appdeprueba.ui.theme.AppDePruebaTheme
 import kotlinx.coroutines.delay
 
-// --- MODELOS DE DATOS ---
-data class Exercise(
-    val name: String,
-    val reps: Int,
-    val sets: Int,
-    val weight: Int,
-    val wait: Int,
-    val rest: Int
-)
-
-data class Routine(
-    val name: String,
-    val exerciseNames: List<String>
-)
+// --- MODELOS ---
+data class Exercise(val name: String, val reps: Int, val sets: Int, val weight: Int, val wait: Int, val rest: Int)
+data class Routine(val name: String, val exerciseNames: List<String>)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -66,10 +55,8 @@ class MainActivity : ComponentActivity() {
             AppDePruebaTheme {
                 var showWelcome by remember { mutableStateOf(true) }
                 val navController = rememberNavController()
-
-                if (showWelcome) {
-                    WelcomeScreen { showWelcome = false }
-                } else {
+                if (showWelcome) { WelcomeScreen { showWelcome = false } }
+                else {
                     NavHost(navController = navController, startDestination = "menu") {
                         composable("menu") { MainScreen(navController) }
                         composable("ejercicios") { ExercisesScreen(navController) }
@@ -82,26 +69,23 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun WelcomeScreen(onTimeout: () -> Unit) {
-    LaunchedEffect(Unit) { delay(2000); onTimeout() }
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
-        Text(text = "¡¡Bienvenido!!", color = Color(0xFF00FF00), fontSize = 40.sp, fontWeight = FontWeight.Bold)
+fun WelcomeScreen(onFinished: () -> Unit) {
+    LaunchedEffect(Unit) { delay(2000); onFinished() }
+    Box(Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
+        Text("¡¡Bienvenido!!", color = Color(0xFF00FF00), fontSize = 40.sp, fontWeight = FontWeight.Bold)
     }
 }
 
-// --- PANTALLA DE INICIO ---
 @Composable
 fun MainScreen(navController: NavController) {
     val context = LocalContext.current
     val routinesList = remember { mutableStateListOf<Routine>() }
     val allExercises = remember { mutableStateListOf<Exercise>() }
-    
     var routineStarted by remember { mutableStateOf(false) }
     var selectedExercises by remember { mutableStateOf<List<Exercise>>(emptyList()) }
     var showAdhocDialog by remember { mutableStateOf(false) }
     var showQuickEdit by remember { mutableStateOf(false) }
 
-    // Estados del Entrenamiento
     var currentIndex by remember { mutableIntStateOf(0) }
     var currentSet by remember { mutableIntStateOf(1) }
     var timeLeft by remember { mutableIntStateOf(0) }
@@ -121,9 +105,8 @@ fun MainScreen(navController: NavController) {
     }
 
     LaunchedEffect(routineStarted, phase, isPaused, timeLeft) {
-        if (routineStarted && !isPaused && timeLeft > 0) {
-            delay(1000); timeLeft--
-        } else if (routineStarted && !isPaused && timeLeft <= 0) {
+        if (routineStarted && !isPaused && timeLeft > 0) { delay(1000); timeLeft-- }
+        else if (routineStarted && !isPaused && timeLeft <= 0) {
             val currentEx = selectedExercises.getOrNull(currentIndex) ?: return@LaunchedEffect
             when (phase) {
                 0 -> { phase = 1; timeLeft = 60 }
@@ -131,27 +114,25 @@ fun MainScreen(navController: NavController) {
                 2 -> {
                     if (currentSet < currentEx.sets) { currentSet++; phase = 1; timeLeft = 60 }
                     else if (currentIndex < selectedExercises.size - 1) { currentIndex++; currentSet = 1; phase = 0; timeLeft = selectedExercises[currentIndex].wait }
-                    else { routineStarted = false; Toast.makeText(context, "¡Rutina Completada!", Toast.LENGTH_LONG).show() }
+                    else { routineStarted = false; Toast.makeText(context, "Rutina Completada", Toast.LENGTH_LONG).show() }
                 }
             }
         }
     }
 
     Scaffold(bottomBar = { BottomNavBar(navController, "menu") }) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().background(brush = gradientMain).padding(innerPadding)) {
+        Box(Modifier.fillMaxSize().background(brush = gradientMain).padding(innerPadding)) {
             if (!routineStarted) {
-                Column(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     MenuButton("Rutina Rápida", Modifier.fillMaxWidth(), bColor = Color(0xFFFFA500), cColor = Color(0xFFFFA500).copy(0.1f)) { showAdhocDialog = true }
                     Spacer(Modifier.height(24.dp))
                     Text("Mis Rutinas", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-                    Box(modifier = Modifier.weight(0.45f)) {
+                    Box(Modifier.weight(0.45f)) {
                         LazyColumn {
                             items(routinesList) { routine ->
-                                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
+                                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
                                     val exList = routine.exerciseNames.mapNotNull { name -> allExercises.find { it.name == name } }
-                                    if (exList.isNotEmpty()) {
-                                        selectedExercises = exList; currentIndex = 0; currentSet = 1; phase = 0; timeLeft = exList[0].wait; routineStarted = true
-                                    }
+                                    if (exList.isNotEmpty()) { selectedExercises = exList; currentIndex = 0; currentSet = 1; phase = 0; timeLeft = exList[0].wait; routineStarted = true }
                                 }, colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)), border = BorderStroke(1.dp, Color(0xFFBB86FC).copy(0.4f))) {
                                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Icon(Icons.Default.PlayArrow, null, tint = Color(0xFFBB86FC)); Spacer(Modifier.width(12.dp)); Text(routine.name, color = Color.White, fontSize = 16.sp)
@@ -162,10 +143,10 @@ fun MainScreen(navController: NavController) {
                     }
                     Spacer(Modifier.height(24.dp))
                     Text("Ejercicios Sueltos", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
-                    Box(modifier = Modifier.weight(0.55f)) {
+                    Box(Modifier.weight(0.55f)) {
                         LazyColumn {
                             items(allExercises) { exercise ->
-                                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
+                                Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable {
                                     selectedExercises = listOf(exercise); currentIndex = 0; currentSet = 1; phase = 0; timeLeft = exercise.wait; routineStarted = true
                                 }, colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)), border = BorderStroke(1.dp, Color(0xFF00FF00).copy(0.3f))) {
                                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -178,61 +159,47 @@ fun MainScreen(navController: NavController) {
                     }
                 }
             } else {
-                TrainingUI(
-                    ex = selectedExercises[currentIndex],
-                    idx = currentIndex,
-                    total = selectedExercises.size,
-                    set = currentSet,
-                    ph = phase,
-                    time = timeLeft,
-                    paused = isPaused,
-                    fullList = selectedExercises,
-                    onPause = { isPaused = !isPaused },
-                    onStop = { routineStarted = false },
-                    onEdit = { showQuickEdit = true }
-                )
+                TrainingUI(selectedExercises[currentIndex], currentIndex, selectedExercises.size, currentSet, phase, timeLeft, isPaused, selectedExercises, { isPaused = !isPaused }, { routineStarted = false }, { showQuickEdit = true })
             }
         }
     }
 
     if (showQuickEdit) {
-        AlertDialog(onDismissRequest = { showQuickEdit = false }, containerColor = Color(0xFF1A1C20), title = { Text("Ajustar para hoy", color = Color.White) }, text = {
+        AlertDialog(onDismissRequest = { showQuickEdit = false }, containerColor = Color(0xFF1A1C20), title = { Text("Ajustar hoy", color = Color.White) }, text = {
             ExerciseForm(false, selectedExercises[currentIndex], { showQuickEdit = false }, {}, { 
-                val newList = selectedExercises.toMutableList()
-                newList[currentIndex] = it; selectedExercises = newList; showQuickEdit = false
+                val newList = selectedExercises.toMutableList(); newList[currentIndex] = it; selectedExercises = newList; showQuickEdit = false
             })
         }, confirmButton = {})
     }
 
     if (showAdhocDialog) {
-        val adhocSelection = remember { mutableStateListOf<Exercise>() }
-        var adName by remember { mutableStateOf("") }
-        var adSave by remember { mutableStateOf(false) }
-        AlertDialog(onDismissRequest = { showAdhocDialog = false }, containerColor = Color(0xFF1A1C20), title = { Text("Nueva Rutina Rápida", color = Color.White) }, text = {
+        val selection = remember { mutableStateListOf<Exercise>() }
+        var name by remember { mutableStateOf("") }; var save by remember { mutableStateOf(false) }
+        AlertDialog(onDismissRequest = { showAdhocDialog = false }, containerColor = Color(0xFF1A1C20), title = { Text("Rutina Adhoc", color = Color.White) }, text = {
             Column {
-                OutlinedTextField(value = adName, onValueChange = { adName = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White))
-                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(adSave, { adSave = it }, colors = CheckboxDefaults.colors(checkedColor = Color(0xFF00FF00))); Text("Guardar", color = Color.White) }
-                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Nombre") }, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White))
+                Row(verticalAlignment = Alignment.CenterVertically) { Checkbox(save, { save = it }); Text("Guardar", color = Color.White) }
+                LazyColumn(Modifier.heightIn(max = 300.dp)) {
                     itemsIndexed(allExercises) { _, ex ->
-                        val sIdx = adhocSelection.indexOf(ex)
-                        Row(Modifier.fillMaxWidth().clickable { if (sIdx != -1) adhocSelection.removeAt(sIdx) else adhocSelection.add(ex) }.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.size(24.dp).background(if (sIdx != -1) Color(0xFF00FF00) else Color.Transparent, CircleShape).border(1.dp, Color.Gray, CircleShape), contentAlignment = Alignment.Center) { if (sIdx != -1) Text((sIdx + 1).toString(), color = Color.Black, fontSize = 12.sp, fontWeight = FontWeight.Bold) }
-                            Text(ex.name, color = if (sIdx != -1) Color(0xFF00FF00) else Color.White, modifier = Modifier.padding(start = 12.dp))
+                        val sIdx = selection.indexOf(ex)
+                        Row(Modifier.fillMaxWidth().clickable { if (sIdx != -1) selection.removeAt(sIdx) else selection.add(ex) }.padding(8.dp)) {
+                            Box(Modifier.size(20.dp).background(if (sIdx != -1) Color(0xFF00FF00) else Color.Transparent, CircleShape).border(1.dp, Color.Gray, CircleShape), contentAlignment = Alignment.Center) { if (sIdx != -1) Text((sIdx + 1).toString(), color = Color.Black, fontSize = 10.sp) }
+                            Text(ex.name, color = Color.White, modifier = Modifier.padding(start = 8.dp))
                         }
                     }
                 }
             }
         }, confirmButton = { TextButton(onClick = {
-            if (adhocSelection.isNotEmpty()) {
-                if (adSave && adName.isNotBlank()) {
-                    val r = Routine(adName, adhocSelection.map { it.name }); routinesList.add(r)
+            if (selection.isNotEmpty()) {
+                if (save && name.isNotBlank()) {
+                    routinesList.add(Routine(name, selection.map { it.name }))
                     val d = routinesList.joinToString("|") { "${it.name}:${it.exerciseNames.joinToString(",")}" }
                     context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE).edit().putString("routines", d).apply()
                 }
-                selectedExercises = adhocSelection.toList(); currentIndex = 0; currentSet = 1; phase = 0; timeLeft = selectedExercises[0].wait; routineStarted = true
+                selectedExercises = selection.toList(); currentIndex = 0; currentSet = 1; phase = 0; timeLeft = selectedExercises[0].wait; routineStarted = true
             }
             showAdhocDialog = false
-        }) { Text("ENTRENAR", color = Color(0xFF00FF00), fontWeight = FontWeight.Bold) } })
+        }) { Text("DALE", color = Color(0xFF00FF00)) } })
     }
 }
 
@@ -249,13 +216,12 @@ fun TrainingUI(ex: Exercise, idx: Int, total: Int, set: Int, ph: Int, time: Int,
             CircularProgressIndicator(progress = progress, modifier = Modifier.fillMaxSize(), color = phColor, strokeWidth = 10.dp, trackColor = Color.White.copy(0.1f))
             Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(phText, color = phColor, fontSize = 18.sp, fontWeight = FontWeight.Bold); Text("%02d:%02d".format(time / 60, time % 60), color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Black) }
         }
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             InfoCol("PESO", "${ex.weight}kg"); InfoCol("REPS", "${ex.reps}"); InfoCol("ESPERA", "${ex.wait}s"); InfoCol("DESC.", "${ex.rest}s")
         }
-        if (total == 1) { MenuButton("EDITAR VALORES", Modifier.padding(top = 8.dp), bColor = Color.Yellow) { onEdit() } }
-        Spacer(Modifier.height(24.dp))
-        Text("RUTINA EN CURSO:", color = Color.White.copy(0.5f), fontSize = 12.sp, modifier = Modifier.align(Alignment.Start))
+        if (total == 1) { MenuButton("EDITAR", Modifier.padding(top = 8.dp), bColor = Color.Yellow) { onEdit() } }
+        Spacer(Modifier.height(20.dp))
         LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
             itemsIndexed(fullList) { i, item ->
                 val isDone = i < idx; val isNow = i == idx
@@ -273,7 +239,6 @@ fun TrainingUI(ex: Exercise, idx: Int, total: Int, set: Int, ph: Int, time: Int,
 @Composable
 fun InfoCol(l: String, v: String) { Column(horizontalAlignment = Alignment.CenterHorizontally) { Text(l, color = Color.Gray, fontSize = 10.sp); Text(v, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold) } }
 
-// --- PANTALLAS DE GESTIÓN ---
 @Composable
 fun ExercisesScreen(navController: NavController) {
     val context = LocalContext.current
@@ -290,15 +255,11 @@ fun ExercisesScreen(navController: NavController) {
         context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE).edit().putString("exercises", data).apply()
     }
     Scaffold(bottomBar = { BottomNavBar(navController, "ejercicios") }) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().background(brush = gradientEx).padding(innerPadding)) {
+        Box(Modifier.fillMaxSize().background(brush = gradientEx).padding(innerPadding)) {
             Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Ejercicios", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(20.dp))
-                if (showForm) {
-                    ExerciseForm(editingIndex != null, editingIndex?.let { exercisesList[it] }, { showForm = false; editingIndex = null }, { editingIndex?.let { exercisesList.removeAt(it) }; save(); showForm = false; editingIndex = null }, { if (editingIndex != null) exercisesList[editingIndex!!] = it else exercisesList.add(it); save(); showForm = false; editingIndex = null })
-                } else {
-                    MenuButton("Agregar Ejercicio") { editingIndex = null; showForm = true }; Spacer(Modifier.height(16.dp))
-                    LazyColumn(Modifier.fillMaxWidth().weight(1f)) { itemsIndexed(exercisesList) { index, ex -> ExerciseItem(ex, editingIndex == index) { editingIndex = index; showForm = true } } }
-                }
+                if (showForm) { ExerciseForm(editingIndex != null, editingIndex?.let { exercisesList[it] }, { showForm = false; editingIndex = null }, { editingIndex?.let { exercisesList.removeAt(it) }; save(); showForm = false; editingIndex = null }, { if (editingIndex != null) exercisesList[editingIndex!!] = it else exercisesList.add(it); save(); showForm = false; editingIndex = null }) }
+                else { MenuButton("Agregar Ejercicio") { editingIndex = null; showForm = true }; Spacer(Modifier.height(16.dp)); LazyColumn(Modifier.fillMaxWidth().weight(1f)) { itemsIndexed(exercisesList) { index, ex -> ExerciseItem(ex, editingIndex == index) { editingIndex = index; showForm = true } } } }
             }
         }
     }
@@ -322,15 +283,11 @@ fun RoutinesScreen(navController: NavController) {
         context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE).edit().putString("routines", data).apply()
     }
     Scaffold(bottomBar = { BottomNavBar(navController, "rutinas") }) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().background(brush = gradientRoutine).padding(innerPadding)) {
+        Box(Modifier.fillMaxSize().background(brush = gradientRoutine).padding(innerPadding)) {
             Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Rutinas", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(20.dp))
-                if (showForm) {
-                    RoutineForm(allExercises, editingIndex?.let { routinesList[it] }, { showForm = false; editingIndex = null }, { editingIndex?.let { routinesList.removeAt(it) }; save(); showForm = false; editingIndex = null }, { if (editingIndex != null) routinesList[editingIndex!!] = it else routinesList.add(it); save(); showForm = false; editingIndex = null })
-                } else {
-                    MenuButton("Crear Nueva Rutina", bColor = Color(0xFFBB86FC)) { showForm = true }; Spacer(Modifier.height(16.dp))
-                    LazyColumn(Modifier.fillMaxWidth().weight(1f)) { itemsIndexed(routinesList) { index, routine -> Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { editingIndex = index; showForm = true }, colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.1f)), border = BorderStroke(1.dp, Color(0xFFBB86FC).copy(0.5f))) { Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(routine.name, color = Color(0xFFBB86FC), fontWeight = FontWeight.Bold, fontSize = 18.sp); Text("${routine.exerciseNames.size} ejercicios", color = Color.White.copy(0.6f)) }; Icon(Icons.Default.ChevronRight, null, tint = Color.Gray) } } } }
-                }
+                if (showForm) { RoutineForm(allExercises, editingIndex?.let { routinesList[it] }, { showForm = false; editingIndex = null }, { editingIndex?.let { routinesList.removeAt(it) }; save(); showForm = false; editingIndex = null }, { if (editingIndex != null) routinesList[editingIndex!!] = it else routinesList.add(it); save(); showForm = false; editingIndex = null }) }
+                else { MenuButton("Crear Nueva Rutina", bColor = Color(0xFFBB86FC)) { showForm = true }; Spacer(Modifier.height(16.dp)); LazyColumn(Modifier.fillMaxWidth().weight(1f)) { itemsIndexed(routinesList) { index, routine -> Card(Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { editingIndex = index; showForm = true }, colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.1f)), border = BorderStroke(1.dp, Color(0xFFBB86FC).copy(0.5f))) { Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text(routine.name, color = Color(0xFFBB86FC), fontWeight = FontWeight.Bold, fontSize = 18.sp); Text("${routine.exerciseNames.size} ejercicios", color = Color.White.copy(0.6f)) }; Icon(Icons.Default.ChevronRight, null, tint = Color.Gray) } } } } }
             }
         }
     }
