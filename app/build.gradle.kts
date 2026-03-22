@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.appdeprueba"
+    namespace = "com.example.Gym_App"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.appdeprueba"
+        applicationId = "com.example.Gym_App"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -26,6 +26,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+    
+    applicationVariants.all {
+        outputs.all {
+            if (buildType.name == "release") {
+                (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.outputFileName = "GymBroApp-v${versionName}.apk"
+            }
         }
     }
     compileOptions {
@@ -44,6 +52,7 @@ android {
 
 ksp {
     arg("room.generateKotlin", "false")
+    arg("room.schemaLocation", "$projectDir/schemas")
 }
 
 dependencies {
