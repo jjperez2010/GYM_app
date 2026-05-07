@@ -52,6 +52,14 @@ import com.example.Gym_App.viewmodel.GymViewModel
 import kotlinx.coroutines.delay
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.Vibrator
+import android.os.VibrationEffect
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 
 
 
@@ -94,14 +102,39 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
     
     val isWaitingForUser by viewModel.isWaitingForUser.collectAsState()
 
-    // --- MANTENER PANTALLA ENCENDIDA ---
+    // Sonidos y vibraciones
+    @Suppress("DEPRECATION")
+    val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator }
+
+    // Sensor de ritmo cardíaco para descanso inteligente
+    val sensorManager = remember { context.getSystemService(Context.SENSOR_SERVICE) as SensorManager }
+    val heartRateSensor = remember { sensorManager.getDefaultSensor(Sensor.TYPE_HEART_RATE) }
+    val bpmHistory = remember { mutableStateListOf<Float>() }
+
+    val sensorListener = remember {
+        object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent) {
+                if (event.sensor.type == Sensor.TYPE_HEART_RATE) {
+                    val bpm = event.values[0]
+                    bpmHistory.add(bpm)
+                    if (bpmHistory.size > 10) bpmHistory.removeAt(0)
+                }
+            }
+            override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) {}
+        }
+    }
+
     DisposableEffect(routineStarted) {
         val activity = context as? Activity
         if (routineStarted) {
             activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            if (heartRateSensor != null) {
+                sensorManager.registerListener(sensorListener, heartRateSensor, SensorManager.SENSOR_DELAY_NORMAL)
+            }
         }
         onDispose {
             activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            sensorManager.unregisterListener(sensorListener)
         }
     }
 
@@ -114,7 +147,7 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                 val currentEx = selectedExercises.getOrNull(currentIndex) ?: return@LaunchedEffect
                 when (phase) {
                     0 -> { phase = 1; timeLeft = currentEx.duration }
-                    1 -> { phase = 2; timeLeft = currentEx.rest }
+                    1 -> { phase = 2; timeLeft = currentEx.rest + if (bpmHistory.isNotEmpty() && bpmHistory.average() > 150) 30 else 0 } // Descanso inteligente
                     else -> {
                         val currentWeight = currentEx.weight.toDouble()
 
@@ -147,6 +180,19 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                             }
                         }
                     }
+                }
+
+                // Sonidos y vibraciones para transiciones
+                if (phase == 1) { // Iniciar trabajo
+                    // try {
+                    //     MediaPlayer.create(context, R.raw.beep_work).start()
+                    // } catch (_: Exception) { }
+                    vibrator.vibrate(VibrationEffect.createOneShot(200L, VibrationEffect.DEFAULT_AMPLITUDE))
+                } else if (phase == 2) { // Iniciar descanso
+                    // try {
+                    //     MediaPlayer.create(context, R.raw.beep_rest).start()
+                    // } catch (_: Exception) { }
+                    vibrator.vibrate(VibrationEffect.createOneShot(300L, VibrationEffect.DEFAULT_AMPLITUDE))
                 }
             }
         }
@@ -666,6 +712,37 @@ fun TrainingUI(
             Text("${exercise.weight}KG", color = Color.Gray, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
 
+        // Controles de edición en tiempo real
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            // Series
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Series", color = Color.Gray, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { onUpdateExercise(exercise.name, maxOf(1, exercise.sets - 1), exercise.reps, exercise.weight) }) { Text("-", color = Color.Red) }
+                    Text("${exercise.sets}", color = Color.White, fontSize = 16.sp)
+                    IconButton(onClick = { onUpdateExercise(exercise.name, exercise.sets + 1, exercise.reps, exercise.weight) }) { Text("+", color = Color.Green) }
+                }
+            }
+            // Reps
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Reps", color = Color.Gray, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { onUpdateExercise(exercise.name, exercise.sets, maxOf(1, exercise.reps - 1), exercise.weight) }) { Text("-", color = Color.Red) }
+                    Text("${exercise.reps}", color = Color.White, fontSize = 16.sp)
+                    IconButton(onClick = { onUpdateExercise(exercise.name, exercise.sets, exercise.reps + 1, exercise.weight) }) { Text("+", color = Color.Green) }
+                }
+            }
+            // Peso
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text("Peso", color = Color.Gray, fontSize = 12.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { onUpdateExercise(exercise.name, exercise.sets, exercise.reps, maxOf(0, exercise.weight - 1)) }) { Text("-", color = Color.Red) }
+                    Text("${exercise.weight}", color = Color.White, fontSize = 16.sp)
+                    IconButton(onClick = { onUpdateExercise(exercise.name, exercise.sets, exercise.reps, exercise.weight + 1) }) { Text("+", color = Color.Green) }
+                }
+            }
+        }
+
         Spacer(Modifier.height(32.dp))
 
         // Timer Circular Estilo Imagen
@@ -683,8 +760,12 @@ fun TrainingUI(
             )
             
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(when(phase){0->"PREPÁRATE"; 1->"¡DALE!"; else->"DESCANSO"}, color = phaseColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Text("$timeLeft", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Black)
+                AnimatedVisibility(visible = true, enter = fadeIn(animationSpec = tween(300)), exit = fadeOut()) {
+                    Text(when(phase){0->"PREPÁRATE"; 1->"¡DALE!"; else->"DESCANSO"}, color = phaseColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+                AnimatedVisibility(visible = true, enter = scaleIn(animationSpec = tween(300)), exit = scaleOut()) {
+                    Text("$timeLeft", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Black)
+                }
                 Text("SEGUNDOS", color = Color.Gray, fontSize = 12.sp)
             }
         }
@@ -713,8 +794,11 @@ fun TrainingUI(
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         // Círculo de estado
                         Box(Modifier.size(28.dp).background(if (isCompleted) neonGreen else Color.White.copy(0.1f), CircleShape), contentAlignment = Alignment.Center) {
-                            if (isCompleted) Icon(Icons.Default.Check, null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                            else Text("${index + 1}", color = Color.White, fontSize = 12.sp)
+                            if (isCompleted) {
+                                Icon(Icons.Default.Check, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                            } else {
+                                Text("${index + 1}", color = Color.White, fontSize = 12.sp)
+                            }
                         }
                         
                         Spacer(Modifier.width(16.dp))
