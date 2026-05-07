@@ -40,7 +40,7 @@ fun RoutinesScreen(navController: NavController, viewModel: GymViewModel) {
     val routinesEntity by viewModel.routines.collectAsState()
     val allExercisesEntity by viewModel.exercises.collectAsState()
     
-    val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, it.muscleGroup) }
+    val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, muscleGroup = it.muscleGroup) }
     val routinesList = routinesEntity.map { Routine(it.name, it.exerciseNames.split(",")) }
 
     var showForm by remember { mutableStateOf(false) }
@@ -66,9 +66,17 @@ fun RoutinesScreen(navController: NavController, viewModel: GymViewModel) {
                     Spacer(Modifier.height(16.dp))
                     LazyColumn(Modifier.fillMaxWidth().weight(1f)) { 
                         itemsIndexed(routinesList) { index, routine -> 
-                            // Cálculo de datos técnicos de la rutina
+                            // Cálculo detallado de la rutina:
+                            // (preparación + ejecución + descansos) de cada ejercicio + 10s transición entre ejercicios
                             val routineExs = routine.exerciseNames.mapNotNull { name -> allExercises.find { it.name == name } }
-                            val totalMin = routineExs.sumOf { (it.sets * 60) + ((it.sets - 1) * it.rest) } / 60
+                            val totalSecs = routineExs.sumOf { ex -> 
+                                val prep = 20
+                                val exec = ex.sets * ex.duration
+                                val rest = (ex.sets - 1) * ex.rest
+                                prep + exec + rest
+                            } + (if (routineExs.size > 1) (routineExs.size - 1) * 15 else 0)
+                            
+                            val totalMin = totalSecs / 60
                             val muscleSum = routineExs.map { it.muscleGroup }.distinct().take(2).joinToString(", ")
 
                             Card(
@@ -85,7 +93,7 @@ fun RoutinesScreen(navController: NavController, viewModel: GymViewModel) {
                                             Box(Modifier.size(3.dp).background(Color.Gray, CircleShape))
                                             Spacer(Modifier.width(8.dp))
                                             Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(12.dp))
-                                            Text(" ${totalMin}m", color = Color.Gray, fontSize = 12.sp)
+                                            Text(" ~${totalMin} min", color = Color.Gray, fontSize = 12.sp)
                                         }
                                         if (muscleSum.isNotEmpty()) {
                                             Text(muscleSum, color = Color(0xFF00FF00).copy(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Medium)

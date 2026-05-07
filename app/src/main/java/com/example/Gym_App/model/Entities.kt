@@ -10,8 +10,11 @@ data class ExerciseEntity(
     val sets: Int,
     val weight: Int,
     val rest: Int,
+    val duration: Int = 60,
     val muscleGroup: String,
-    val equipmentType: String = "Peso Corporal"
+    val equipmentType: String = "Peso Corporal",
+    val updateReminderDays: Int = 30, // Default to 30 days
+    val lastUpdateDate: Long = 0
 )
 
 @Entity(tableName = "routines")

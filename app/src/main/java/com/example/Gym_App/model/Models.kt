@@ -6,7 +6,10 @@ data class Exercise(
     val sets: Int,
     val weight: Int,
     val rest: Int,
-    val muscleGroup: String
+    val duration: Int = 60,
+    val muscleGroup: String,
+    val updateReminderDays: Int = 30,
+    val lastUpdateDate: Long = 0
 )
 
 data class Routine(

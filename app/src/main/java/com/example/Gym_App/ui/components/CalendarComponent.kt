@@ -34,7 +34,7 @@ import java.time.format.TextStyle
 import java.util.*
 
 @Composable
-fun ConsistencyCalendar(workoutDates: List<LocalDate>, workoutHistory: List<WorkoutHistoryEntity> = emptyList()) {
+fun ConsistencyCalendar(workoutDates: List<LocalDate>, workoutHistory: List<WorkoutHistoryEntity> = emptyList(), modifier: Modifier = Modifier) {
     var viewMonth by remember { mutableStateOf(YearMonth.now()) }
     val daysInMonth = viewMonth.lengthOfMonth()
     val firstDayOfMonth = viewMonth.atDay(1).dayOfWeek.value % 7 // 0 for Sunday
@@ -63,74 +63,37 @@ fun ConsistencyCalendar(workoutDates: List<LocalDate>, workoutHistory: List<Work
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 16.dp),
+        modifier = modifier.fillMaxWidth().padding(bottom = 8.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(12.dp),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(0.1f))
     ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = { viewMonth = viewMonth.minusMonths(1) }, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = Color.White)
-                        }
-                        Text(
-                            text = viewMonth.month.getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es")).uppercase(),
-                            color = Color.White,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                        IconButton(onClick = { viewMonth = viewMonth.plusMonths(1) }, modifier = Modifier.size(24.dp)) {
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White)
-                        }
-                    }
-                    Text(
-                        text = "Consistencia mensual ${viewMonth.year}",
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
+        Column(Modifier.padding(10.dp)) {
+            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(viewMonth.month.getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es")).replaceFirstChar { it.uppercase() }, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(" ${viewMonth.year}", color = Color.White.copy(0.5f), fontSize = 13.sp)
                 }
-                
-                // Streak Counter
-                Surface(
-                    color = Color(0xFFFFA500).copy(0.2f),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFFFA500).copy(0.5f))
-                ) {
-                    Row(Modifier.padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.LocalFireDepartment, null, tint = Color(0xFFFFA500), modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("$streak días", color = Color(0xFFFFA500), fontWeight = FontWeight.Bold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.LocalFireDepartment, null, tint = Color(0xFFFFA500), modifier = Modifier.size(14.dp))
+                    Text("$streak", color = Color(0xFFFFA500), fontWeight = FontWeight.Black, fontSize = 13.sp)
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(onClick = { viewMonth = viewMonth.minusMonths(1) }, modifier = Modifier.size(26.dp)) { 
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, modifier = Modifier.size(18.dp), tint = Color.White) 
+                    }
+                    IconButton(onClick = { viewMonth = viewMonth.plusMonths(1) }, modifier = Modifier.size(26.dp)) { 
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.size(18.dp), tint = Color.White) 
                     }
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
-
-            // Días de la semana
+            Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth()) {
                 listOf("D", "L", "M", "M", "J", "V", "S").forEach { day ->
-                    Text(
-                        text = day,
-                        modifier = Modifier.weight(1f),
-                        textAlign = TextAlign.Center,
-                        color = Color.Gray,
-                        fontSize = 12.sp
-                    )
+                    Text(day, Modifier.weight(1f), color = Color.White.copy(0.3f), fontSize = 10.sp, textAlign = TextAlign.Center)
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-
-            // Cuadrícula del calendario
             Column {
                 var currentSlot = 0
                 for (row in 0..5) {
@@ -138,35 +101,17 @@ fun ConsistencyCalendar(workoutDates: List<LocalDate>, workoutHistory: List<Work
                     Row(Modifier.fillMaxWidth()) {
                         for (col in 0..6) {
                             val dayNumber = currentSlot - firstDayOfMonth + 1
-                            Box(Modifier.weight(1f).aspectRatio(1f), contentAlignment = Alignment.Center) {
+                            Box(Modifier.weight(1f).aspectRatio(1.4f), Alignment.Center) {
                                 if (dayNumber in 1..daysInMonth) {
                                     val date = viewMonth.atDay(dayNumber)
                                     val hasWorkout = workoutDates.contains(date)
                                     val isToday = date == LocalDate.now()
-
                                     Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(CircleShape)
-                                            .background(
-                                                if (hasWorkout) Color(0xFF00FF00).copy(0.2f) 
-                                                else if (isToday) Color.White.copy(0.1f) 
-                                                else Color.Transparent
-                                            )
-                                            .then(if (isToday) Modifier.border(1.dp, Color.White.copy(0.5f), CircleShape) else Modifier)
-                                            .clickable {
-                                                if (hasWorkout) {
-                                                    selectedDateForHistory = date
-                                                }
-                                            },
-                                        contentAlignment = Alignment.Center
+                                        Modifier.size(24.dp).clip(CircleShape).background(if (hasWorkout) Color(0xFF00FF00) else if (isToday) Color.White.copy(0.1f) else Color.Transparent)
+                                            .clickable { if (hasWorkout) selectedDateForHistory = date },
+                                        Alignment.Center
                                     ) {
-                                        Text(
-                                            text = dayNumber.toString(),
-                                            color = if (hasWorkout) Color(0xFF00FF00) else Color.White,
-                                            fontSize = 14.sp,
-                                            fontWeight = if (hasWorkout || isToday) FontWeight.Bold else FontWeight.Normal
-                                        )
+                                        Text(dayNumber.toString(), color = if (hasWorkout) Color.Black else Color.White, fontSize = 11.sp, fontWeight = if (hasWorkout || isToday) FontWeight.Bold else FontWeight.Normal)
                                     }
                                 }
                             }

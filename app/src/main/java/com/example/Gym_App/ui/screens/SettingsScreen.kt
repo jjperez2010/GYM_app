@@ -1,5 +1,6 @@
 package com.example.Gym_App.ui.screens
 
+import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -14,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,7 +25,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -226,6 +231,51 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
                 Spacer(Modifier.height(16.dp))
                 NumericStepper("Tiempo de preparación previa (s)", globalWait, 5, 10) { globalWait = it; prefs.edit { putInt("globalWait", it) } }
                 
+                Spacer(Modifier.height(24.dp))
+                Text("Soporte Técnico", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+                Spacer(Modifier.height(16.dp))
+                
+                val lastError = remember { prefs.getString("last_error", null) }
+                val clipboardManager = LocalClipboardManager.current
+                
+                Card(
+                    Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
+                    border = BorderStroke(1.dp, Color.Gray.copy(0.3f))
+                ) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Último Error Detectado", color = Color.White, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.weight(1f))
+                            if (lastError != null) {
+                                IconButton(onClick = {
+                                    clipboardManager.setText(AnnotatedString(lastError))
+                                    Toast.makeText(context, "Copiado al portapapeles", Toast.LENGTH_SHORT).show()
+                                }) {
+                                    Icon(Icons.Default.ContentCopy, "Copiar", tint = Color(0xFF00FF00), modifier = Modifier.size(20.dp))
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Box(Modifier.fillMaxWidth().heightIn(max = 150.dp).verticalScroll(rememberScrollState())) {
+                            Text(
+                                text = lastError ?: "No se han detectado errores recientes.",
+                                color = if (lastError != null) Color(0xFFFFBABA) else Color.Gray,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        if (lastError != null) {
+                            TextButton(
+                                onClick = { prefs.edit { remove("last_error") }; navController.navigate("settings") },
+                                modifier = Modifier.align(Alignment.End)
+                            ) {
+                                Text("LIMPIAR LOG", color = Color.Gray, fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+
                 Spacer(Modifier.height(24.dp))
                 
                 MenuButton("RESTAURAR EJERCICIOS POR DEFECTO", Modifier.fillMaxWidth(), bColor = Color.Yellow) {

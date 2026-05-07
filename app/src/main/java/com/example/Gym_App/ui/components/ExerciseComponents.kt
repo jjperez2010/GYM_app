@@ -11,7 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.Gym_App.model.Exercise
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,6 +36,8 @@ fun ExerciseForm(
     var reps by remember { mutableIntStateOf(initial?.reps ?: 10) }
     var weight by remember { mutableIntStateOf(initial?.weight ?: 30) }
     var rest by remember { mutableIntStateOf(initial?.rest ?: 120) }
+    var duration by remember { mutableIntStateOf(initial?.duration ?: 60) }
+    var updateReminderDays by remember { mutableIntStateOf(initial?.updateReminderDays ?: 30) }
     
     Column(Modifier.verticalScroll(rememberScrollState())) {
         OutlinedTextField(
@@ -82,10 +86,16 @@ fun ExerciseForm(
         NumericStepper("Reps", reps, 1) { reps = it }
         NumericStepper("Peso (0=Corp, -1=Asist)", weight, 1, 5) { weight = it }
         NumericStepper("Descanso", rest, 10) { rest = it }
+        NumericStepper("Tiempo Ejecución (s)", duration, 5) { duration = it }
         
+        Spacer(Modifier.height(16.dp))
+        Text("Recordatorio para subir carga", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        Text("Avisar después de X días sin cambios en el ejercicio", color = Color.Gray, fontSize = 12.sp)
+        NumericStepper("Días (0=Desactivado)", updateReminderDays, 1, 7) { updateReminderDays = it }
+
         Row(Modifier.padding(top = 16.dp)) {
             if (isEditMode) { MenuButton("Eliminar", Modifier.weight(1f), bColor = Color.Red) { onDelete() }; Spacer(Modifier.width(8.dp)) }
-            MenuButton("Cancelar", Modifier.weight(1f), bColor = Color.Gray) { onCancel() }; Spacer(Modifier.width(8.dp)); MenuButton("Guardar", Modifier.weight(1f)) { if (name.isNotBlank()) onSave(Exercise(name, reps, sets, weight, rest, muscle)) }
+            MenuButton("Cancelar", Modifier.weight(1f), bColor = Color.Gray) { onCancel() }; Spacer(Modifier.width(8.dp)); MenuButton("Guardar", Modifier.weight(1f)) { if (name.isNotBlank()) onSave(Exercise(name, reps, sets, weight, rest, duration, muscle, updateReminderDays, initial?.lastUpdateDate ?: 0L)) }
         }
     }
 }

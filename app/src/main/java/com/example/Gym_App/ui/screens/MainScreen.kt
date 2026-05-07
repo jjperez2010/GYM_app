@@ -21,6 +21,7 @@ import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FlashOn
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.Stop
@@ -46,6 +47,7 @@ import com.example.Gym_App.model.Exercise
 import com.example.Gym_App.model.Routine
 import com.example.Gym_App.model.WorkoutHistoryEntity
 import com.example.Gym_App.ui.components.*
+import com.example.Gym_App.ui.components.BottomNavBar
 import com.example.Gym_App.viewmodel.GymViewModel
 import kotlinx.coroutines.delay
 
@@ -61,7 +63,7 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
     val workoutDates by viewModel.workoutDates.collectAsState()
     val workoutHistory by viewModel.history.collectAsState()
     
-    val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, it.muscleGroup) }
+    val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, it.duration, it.muscleGroup) }
     val routinesList = routinesEntity.map { Routine(it.name, it.exerciseNames.split(",")) }
 
     var routineStarted by rememberSaveable { mutableStateOf(false) }
@@ -109,7 +111,7 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
             } else {
                 val currentEx = selectedExercises.getOrNull(currentIndex) ?: return@LaunchedEffect
                 when (phase) {
-                    0 -> { phase = 1; timeLeft = 60 }
+                    0 -> { phase = 1; timeLeft = currentEx.duration }
                     1 -> { phase = 2; timeLeft = currentEx.rest }
                     else -> {
                         val currentWeight = currentEx.weight.toDouble()
@@ -121,14 +123,14 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                                 weight = currentWeight,
                                 reps = currentEx.reps,
                                 sets = 1,
-                                volume = (currentWeight * currentEx.reps.toDouble())
+                                volume = (if (currentWeight > 0) currentWeight else 1.0) * currentEx.reps.toDouble()
                             )
                         )
 
                         if (currentSet < currentEx.sets) {
                             currentSet++
                             phase = 1
-                            timeLeft = 60
+                            timeLeft = currentEx.duration
                         } else {
                             if (!completedExercisesIndices.contains(currentIndex)) {
                                 completedExercisesIndices.add(currentIndex)
@@ -169,7 +171,11 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                     Spacer(Modifier.height(16.dp))
                     
                     // CALENDARIO DE CONSISTENCIA
-                    ConsistencyCalendar(workoutDates, workoutHistory)
+                    ConsistencyCalendar(
+                        workoutDates = workoutDates, 
+                        workoutHistory = workoutHistory,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                     
                     Spacer(Modifier.height(20.dp))
                     
@@ -610,65 +616,102 @@ fun TrainingUI(
     onSkipExercise: () -> Unit,
     onStop: () -> Unit
 ) {
+    val neonGreen = Color(0xFFC6FF00)
+
     Column(
-        Modifier.fillMaxSize().padding(24.dp),
+        Modifier.fillMaxSize().padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Ejercicio ${completedIndices.size + 1} de $totalExercises", color = Color.Gray, fontSize = 14.sp)
-            Text(exercise.name.uppercase(), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-            // PARÁMETROS DEBAJO DEL NOMBRE
-            Text("${exercise.sets} series x ${exercise.reps} reps — ${exercise.weight}kg", color = Color(0xFF00FF00), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        // Indicador superior: EJERCICIO 1 DE 5
+        Surface(
+            color = Color.Black.copy(0.3f),
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(0.5.dp, neonGreen.copy(0.5f))
+        ) {
+            Text(
+                "EJERCICIO ${completedIndices.size + 1} DE $totalExercises",
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                color = neonGreen,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
         }
 
         Spacer(Modifier.height(16.dp))
+        
+        Text(exercise.name.uppercase(), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
+        
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("${exercise.sets}", color = neonGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(" SERIES X ", color = Color.Gray, fontSize = 14.sp)
+            Text("${exercise.reps}", color = neonGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(" REPS — ", color = Color.Gray, fontSize = 14.sp)
+            Text("${exercise.weight}KG", color = Color.Gray, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        }
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            val phaseText = when (phase) { 0 -> "PREPÁRATE"; 1 -> "¡DALE!"; else -> "DESCANSO" }
-            val phaseColor = when (phase) { 0 -> Color.Yellow; 1 -> Color(0xFF00FF00); else -> Color(0xFF00BFFF) }
-            Text(phaseText, color = phaseColor, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(32.dp))
 
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(160.dp)) {
-                CircularProgressIndicator(progress = { if (isPaused) 0f else {
-                    val totalPhaseTime = if (phase == 1) 60f else if (phase == 2) exercise.rest.toFloat() else globalWait.toFloat()
-                    if (totalPhaseTime > 0) timeLeft / totalPhaseTime else 0f
-                } }, modifier = Modifier.fillMaxSize(), color = phaseColor, strokeWidth = 8.dp, trackColor = Color.White.copy(alpha = 0.1f))
-                Text(text = if (isPaused) "PAUSA" else "$timeLeft", color = Color.White, fontSize = 42.sp, fontWeight = FontWeight.Black)
+        // Timer Circular Estilo Imagen
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
+            val phaseColor = when (phase) { 0 -> Color.Yellow; 1 -> neonGreen; else -> Color(0xFF00BFFF) }
+            val totalPhaseTime = if (phase == 1) exercise.duration.toFloat() else if (phase == 2) exercise.rest.toFloat() else globalWait.toFloat()
+            val progress = if (totalPhaseTime > 0) timeLeft / totalPhaseTime else 0f
+            
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxSize(),
+                color = phaseColor,
+                strokeWidth = 4.dp,
+                trackColor = Color.White.copy(0.1f)
+            )
+            
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(when(phase){0->"PREPÁRATE"; 1->"¡DALE!"; else->"DESCANSO"}, color = phaseColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("$timeLeft", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Black)
+                Text("SEGUNDOS", color = Color.Gray, fontSize = 12.sp)
             }
-            Spacer(Modifier.height(8.dp))
-            Text("Serie $currentSet de ${exercise.sets}", color = Color.White, fontSize = 18.sp)
         }
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(24.dp))
+        
+        Surface(color = Color.Black.copy(0.3f), shape = RoundedCornerShape(16.dp)) {
+            Text("SERIE $currentSet DE ${exercise.sets}", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = neonGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+        }
 
-        // Lista de ejercicios con progreso
-        Text("Progreso de la rutina:", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.align(Alignment.Start))
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp)) {
+        Spacer(Modifier.height(32.dp))
+
+        Text("PROGRESO DE LA RUTINA", color = Color.Gray, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+        
+        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             itemsIndexed(allExercises) { index, ex ->
                 val isCompleted = completedIndices.contains(index)
                 val isCurrent = index == currentIndex
-                Row(
-                    Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.White.copy(if (isCurrent) 0.1f else 0.05f),
+                    shape = RoundedCornerShape(12.dp),
+                    border = if (isCurrent) BorderStroke(1.dp, neonGreen.copy(0.4f)) else BorderStroke(0.5.dp, Color.White.copy(0.1f))
                 ) {
-                    if (isCompleted) {
-                        Icon(Icons.Default.Check, null, tint = Color(0xFF00FF00), modifier = Modifier.size(16.dp))
-                    } else if (isCurrent) {
-                        Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                    } else {
-                        Box(Modifier.size(16.dp).background(Color.Gray.copy(0.3f), CircleShape))
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = ex.name,
-                            color = if (isCompleted) Color.Gray else if (isCurrent) Color.White else Color.Gray.copy(0.5f),
-                            fontSize = 14.sp,
-                            fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal,
-                            textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None
-                        )
-                        // Pequeño detalle de parámetros en la lista
-                        Text("${ex.sets}x${ex.reps} — ${ex.weight}kg", color = if(isCurrent) Color(0xFF00FF00).copy(0.7f) else Color.Gray.copy(0.4f), fontSize = 10.sp)
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // Círculo de estado
+                        Box(Modifier.size(28.dp).background(if (isCompleted) neonGreen else Color.White.copy(0.1f), CircleShape), contentAlignment = Alignment.Center) {
+                            if (isCompleted) Icon(Icons.Default.Check, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                            else Text("${index + 1}", color = Color.White, fontSize = 12.sp)
+                        }
+                        
+                        Spacer(Modifier.width(16.dp))
+                        
+                        Column(Modifier.weight(1f)) {
+                            Text(ex.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text("${ex.sets}×${ex.reps} — ${ex.weight}kg", color = Color.Gray, fontSize = 12.sp)
+                        }
+                        
+                        if (isCurrent) {
+                            Surface(color = neonGreen.copy(0.1f), shape = RoundedCornerShape(4.dp)) {
+                                Text("ACTUAL", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = neonGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
             }
@@ -676,41 +719,41 @@ fun TrainingUI(
 
         Spacer(Modifier.height(16.dp))
 
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
-                // Botón de Pausa/Reanudar
-                Button(
-                    onClick = onTogglePause,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isPaused) Color(0xFF00FF00) else Color(0xFFFF5252),
-                        contentColor = if (isPaused) Color.Black else Color.White
-                    ),
-                    modifier = Modifier.weight(1f).height(56.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(if (isPaused) "REANUDAR" else "PAUSAR", fontWeight = FontWeight.Black, fontSize = 16.sp)
-                }
-                
-                Spacer(Modifier.width(8.dp))
-                
-                // Botón de STOP al lado de Pausa
-                IconButton(
-                    onClick = onStop, 
-                    modifier = Modifier.size(56.dp).background(Color.Red.copy(0.2f), RoundedCornerShape(12.dp))
-                ) {
-                    Icon(Icons.Default.Stop, "Detener", tint = Color.Red, modifier = Modifier.size(30.dp))
+        // Botones Inferiores Estilo Imagen
+        Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Button(
+                onClick = onTogglePause,
+                colors = ButtonDefaults.buttonColors(containerColor = neonGreen),
+                modifier = Modifier.weight(1f).height(60.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause, null, tint = Color.Black)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (isPaused) "REANUDAR" else "PAUSAR", color = Color.Black, fontWeight = FontWeight.Black, fontSize = 16.sp)
                 }
             }
             
-            Spacer(Modifier.height(8.dp))
-            
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onFinish, modifier = Modifier.background(Color.White.copy(0.1f), CircleShape)) {
-                    Icon(Icons.Default.PlayArrow, "Siguiente Fase", tint = Color.White)
+            // Botones de acción rápida en fila para evitar superposición
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(onClick = onFinish, modifier = Modifier.size(44.dp).background(Color.White.copy(0.1f), CircleShape)) {
+                    Icon(Icons.Default.PlayArrow, null, tint = Color.White)
                 }
-                Spacer(Modifier.width(16.dp))
-                IconButton(onClick = onSkipExercise, modifier = Modifier.background(Color.White.copy(0.1f), CircleShape)) {
-                    Icon(Icons.Default.SkipNext, "Saltar/Posponer", tint = Color.White)
+                IconButton(onClick = onSkipExercise, modifier = Modifier.size(44.dp).background(Color.White.copy(0.1f), CircleShape)) {
+                    Icon(Icons.Default.SkipNext, null, tint = Color.White)
+                }
+            }
+
+            Button(
+                onClick = onStop,
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(0.1f)),
+                modifier = Modifier.width(80.dp).height(60.dp),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(0.5.dp, Color.Red.copy(0.5f))
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.Stop, null, tint = Color.Red, modifier = Modifier.size(20.dp))
+                    Text("FIN", color = Color.White.copy(0.7f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

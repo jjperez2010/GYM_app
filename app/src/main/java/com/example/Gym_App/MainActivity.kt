@@ -1,6 +1,8 @@
 package com.example.Gym_App
 
+import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,6 +20,14 @@ import com.example.Gym_App.ui.theme.AppDePruebaTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        Thread.setDefaultUncaughtExceptionHandler { _, throwable ->
+            val prefs = getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+            prefs.edit().putString("last_error", Log.getStackTraceString(throwable)).apply()
+            android.os.Process.killProcess(android.os.Process.myPid())
+            System.exit(1)
+        }
+
         enableEdgeToEdge()
         setContent {
             AppDePruebaTheme {

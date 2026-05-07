@@ -156,7 +156,7 @@ fun ExercisesScreen(navController: NavController, viewModel: GymViewModel) {
                 if (showForm) {
                     ExerciseForm(
                         isEditMode = editingExercise != null,
-                        initial = editingExercise?.let { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, it.muscleGroup) },
+                        initial = editingExercise?.let { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, it.duration, it.muscleGroup, it.updateReminderDays, it.lastUpdateDate) },
                         existingMuscles = muscleGroups,
                         onCancel = { showForm = false; editingExercise = null },
                         onDelete = {
@@ -164,10 +164,18 @@ fun ExercisesScreen(navController: NavController, viewModel: GymViewModel) {
                             showForm = false; editingExercise = null
                         },
                         onSave = { updatedEx ->
+                            val now = System.currentTimeMillis()
+                            val lastUpdate = if (editingExercise != null && 
+                                (editingExercise!!.weight != updatedEx.weight || 
+                                 editingExercise!!.reps != updatedEx.reps || 
+                                 editingExercise!!.sets != updatedEx.sets)) now else (editingExercise?.lastUpdateDate ?: 0L)
+                            
                             viewModel.addExercise(ExerciseEntity(
                                 updatedEx.name, updatedEx.reps, updatedEx.sets,
-                                updatedEx.weight, updatedEx.rest, updatedEx.muscleGroup,
-                                selectedEquipment ?: "Peso Corporal"
+                                updatedEx.weight, updatedEx.rest, updatedEx.duration, updatedEx.muscleGroup,
+                                editingExercise?.equipmentType ?: selectedEquipment ?: "Peso Corporal",
+                                updateReminderDays = updatedEx.updateReminderDays,
+                                lastUpdateDate = lastUpdate
                             ))
                             showForm = false; editingExercise = null
                         }
@@ -187,20 +195,36 @@ fun ExercisesScreen(navController: NavController, viewModel: GymViewModel) {
                     } else {
                         LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
                             items(filteredExercises) { ex ->
-                                // Cálculo de tiempo estimado del ejercicio
-                                val estMin = (ex.sets * 60 + (ex.sets - 1) * ex.rest) / 60
+                                // Cálculo de tiempo detallado:
+                                // preparacion (20s) + (sets * duration del usuario) + ((sets - 1) * rest)
+                                val prepTime = 20
+                                val executionTime = ex.sets * ex.duration
+                                val totalRest = (ex.sets - 1) * ex.rest
+                                val totalSecs = prepTime + executionTime + totalRest
+                                val totalMin = totalSecs / 60
+                                val totalRemainder = totalSecs % 60
                                 
+                                val isOverdue = ex.updateReminderDays > 0 && ex.lastUpdateDate > 0 && 
+                                    (System.currentTimeMillis() - ex.lastUpdateDate) > (ex.updateReminderDays.toLong() * 24 * 60 * 60 * 1000)
+
                                 Card(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { 
                                         editingExercise = ex
                                         showForm = true
                                     },
                                     colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
-                                    border = BorderStroke(0.5.dp, Color.White.copy(0.1f))
+                                    border = BorderStroke(if (isOverdue) 2.dp else 0.5.dp, if (isOverdue) Color.Yellow else Color.White.copy(0.1f))
                                 ) {
                                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Column(Modifier.weight(1f)) {
-                                            Text(ex.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(ex.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                                if (isOverdue) {
+                                                    Icon(Icons.Default.Timer, "Subir carga", tint = Color.Yellow, modifier = Modifier.size(16.dp))
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Text("SUBIR CARGA", color = Color.Yellow, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
                                             // Parámetros debajo del nombre
                                             Text("${ex.sets} series x ${ex.reps} reps — ${ex.weight}kg", color = Color(0xFF00FF00), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                                             
@@ -211,7 +235,7 @@ fun ExercisesScreen(navController: NavController, viewModel: GymViewModel) {
                                                 Box(Modifier.size(3.dp).background(Color.Gray, CircleShape))
                                                 Spacer(Modifier.width(8.dp))
                                                 Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(12.dp))
-                                                Text(" ${estMin}m", color = Color.Gray, fontSize = 12.sp)
+                                                Text(" ${totalMin}m ${totalRemainder}s", color = Color.Gray, fontSize = 12.sp)
                                             }
                                             Text("Material: ${ex.equipmentType}", color = Color.Gray, fontSize = 11.sp)
                                         }
