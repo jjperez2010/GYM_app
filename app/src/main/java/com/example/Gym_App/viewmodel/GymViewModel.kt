@@ -93,6 +93,14 @@ class GymViewModel(context: Context) : ViewModel() {
         repository.insertExercise(exercise)
     }
 
+    fun updateExercise(name: String, sets: Int, reps: Int, weight: Int) = viewModelScope.launch {
+        val current = exercises.value.find { it.name == name }
+        if (current != null) {
+            val updated = current.copy(sets = sets, reps = reps, weight = weight)
+            repository.updateExercise(updated)
+        }
+    }
+
     fun deleteExercise(name: String) = viewModelScope.launch {
         repository.deleteExercise(name)
     }

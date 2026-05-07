@@ -50,6 +50,8 @@ import com.example.Gym_App.ui.components.*
 import com.example.Gym_App.ui.components.BottomNavBar
 import com.example.Gym_App.viewmodel.GymViewModel
 import kotlinx.coroutines.delay
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 
 
 
@@ -210,7 +212,7 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                                                 showAdhocDialog.value = true
                                             } else {
                                                 if (routineExercises.isNotEmpty()) {
-                                                    selectedExercises = routineExercises; currentIndex = 0; currentSet = 1; phase = 0; timeLeft = globalWait; routineStarted = true; waitingToStart = true; routineFinished = false
+                                                    selectedExercises = routineExercises; currentIndex = 0; currentSet = 1; phase = 0; timeLeft = globalWait; routineStarted = true; waitingToStart = false; routineFinished = false
                                                     currentRoutineName = itemName
                                                     completedExercisesIndices.clear()
                                                 }
@@ -270,14 +272,14 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                             letterSpacing = 1.sp
                         )
                         Column {
-                            exercises.chunked(2).forEach { rowExercises ->
+                            exercises.chunked(3).forEach { rowExercises ->
                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     rowExercises.forEach { exercise ->
                                         // Duración estimada del ejercicio (trabajo + descansos)
                                         val estMinutes = (exercise.sets * 60 + (exercise.sets - 1) * exercise.rest) / 60
                                         
                                         Card(
-                                            Modifier.weight(1f).padding(vertical = 4.dp).height(80.dp).clickable {
+                                            Modifier.weight(1f).padding(vertical = 4.dp).height(50.dp).clickable {
                                                 selectedExercises = listOf(exercise); currentIndex = 0; currentSet = 1; phase = 0; timeLeft = globalWait; routineStarted = true; waitingToStart = true; routineFinished = false
                                                 currentRoutineName = exercise.name
                                                 completedExercisesIndices.clear()
@@ -285,23 +287,23 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                                             colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.02f)),
                                             border = BorderStroke(0.5.dp, Color.White.copy(0.1f))
                                         ) {
-                                            Column(Modifier.fillMaxSize().padding(8.dp), verticalArrangement = Arrangement.Center) {
-                                                Text(exercise.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Column(Modifier.fillMaxSize().padding(4.dp), verticalArrangement = Arrangement.Center) {
+                                                Text(exercise.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                                 // PARÁMETROS DEBAJO DEL NOMBRE
-                                                Text("${exercise.sets}x${exercise.reps} — ${exercise.weight}kg", color = Color(0xFF00FF00), fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                                
+                                                Text("${exercise.sets}x${exercise.reps} — ${exercise.weight}kg", color = Color(0xFF00FF00), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+
                                                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Icon(Icons.Default.Timer, null, tint = Color.Gray.copy(0.5f), modifier = Modifier.size(9.dp))
+                                                        Icon(Icons.Default.Timer, null, tint = Color.Gray.copy(0.5f), modifier = Modifier.size(7.dp))
                                                         Spacer(Modifier.width(2.dp))
-                                                        Text("${estMinutes}m", color = Color.Gray.copy(0.5f), fontSize = 9.sp)
+                                                        Text("${estMinutes}m", color = Color.Gray.copy(0.5f), fontSize = 7.sp)
                                                     }
-                                                    Text(exercise.muscleGroup, color = Color(0xFF00FF00).copy(0.6f), fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                                    Text(exercise.muscleGroup, color = Color(0xFF00FF00).copy(0.6f), fontSize = 6.sp, fontWeight = FontWeight.Bold)
                                                 }
                                             }
                                         }
                                     }
-                                    if (rowExercises.size == 1) Spacer(Modifier.weight(1f))
+                                    repeat(3 - rowExercises.size) { Spacer(Modifier.weight(1f)) }
                                 }
                             }
                         }
@@ -424,7 +426,11 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                         showNextExerciseSelector = true
                         isPaused = true
                     },
-                    onStop = { showStopConfirmation = true }
+                    onStop = { showStopConfirmation = true },
+                    onUpdateExercise = { name, sets, reps, weight ->
+                        selectedExercises = selectedExercises.map { if (it.name == name) it.copy(sets = sets, reps = reps, weight = weight) else it }
+                        viewModel.updateExercise(name, sets, reps, weight)
+                    }
                 )
             }
         }
@@ -614,9 +620,15 @@ fun TrainingUI(
     onTogglePause: () -> Unit,
     onFinish: () -> Unit,
     onSkipExercise: () -> Unit,
-    onStop: () -> Unit
+    onStop: () -> Unit,
+    onUpdateExercise: (String, Int, Int, Int) -> Unit
 ) {
     val neonGreen = Color(0xFFC6FF00)
+
+    var showEditDialog by remember { mutableStateOf(false) }
+    var editedSets by remember { mutableStateOf(exercise.sets.toString()) }
+    var editedReps by remember { mutableStateOf(exercise.reps.toString()) }
+    var editedWeight by remember { mutableStateOf(exercise.weight.toString()) }
 
     Column(
         Modifier.fillMaxSize().padding(16.dp),
@@ -639,8 +651,13 @@ fun TrainingUI(
 
         Spacer(Modifier.height(16.dp))
         
-        Text(exercise.name.uppercase(), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-        
+        Text(exercise.name.uppercase(), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, modifier = Modifier.clickable {
+            showEditDialog = true
+            editedSets = exercise.sets.toString()
+            editedReps = exercise.reps.toString()
+            editedWeight = exercise.weight.toString()
+        })
+
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text("${exercise.sets}", color = neonGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(" SERIES X ", color = Color.Gray, fontSize = 14.sp)
@@ -757,5 +774,57 @@ fun TrainingUI(
                 }
             }
         }
+    }
+
+    if (showEditDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            containerColor = Color(0xFF1A1C20),
+            title = { Text("Editar Ejercicio", color = Color.White) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = editedSets,
+                        onValueChange = { editedSets = it },
+                        label = { Text("Series") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                    OutlinedTextField(
+                        value = editedReps,
+                        onValueChange = { editedReps = it },
+                        label = { Text("Reps") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                    OutlinedTextField(
+                        value = editedWeight,
+                        onValueChange = { editedWeight = it },
+                        label = { Text("Peso (kg)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    val sets = editedSets.toIntOrNull() ?: exercise.sets
+                    val reps = editedReps.toIntOrNull() ?: exercise.reps
+                    val weight = editedWeight.toIntOrNull() ?: exercise.weight
+                    onUpdateExercise(exercise.name, sets, reps, weight)
+                    showEditDialog = false
+                }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FF00))) {
+                    Text("GUARDAR", color = Color.Black, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("CANCELAR", color = Color.Gray)
+                }
+            }
+        )
     }
 }

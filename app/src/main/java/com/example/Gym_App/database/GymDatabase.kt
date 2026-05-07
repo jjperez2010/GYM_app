@@ -21,6 +21,9 @@ interface GymDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertExercise(exercise: ExerciseEntity): Long
 
+    @androidx.room.Update
+    suspend fun updateExercise(exercise: ExerciseEntity)
+
     @Query("DELETE FROM exercises WHERE name = :name")
     suspend fun deleteExerciseByName(name: String): Int
 

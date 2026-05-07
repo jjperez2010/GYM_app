@@ -14,6 +14,7 @@ class GymRepository(private val gymDao: GymDao) {
     val weightHistory: Flow<List<WeightEntity>> = gymDao.getWeightHistory()
 
     suspend fun insertExercise(exercise: ExerciseEntity) = gymDao.insertExercise(exercise)
+    suspend fun updateExercise(exercise: ExerciseEntity) = gymDao.updateExercise(exercise)
     suspend fun deleteExercise(name: String) = gymDao.deleteExerciseByName(name)
     suspend fun deleteAllExercises() = gymDao.deleteAllExercises()
 
