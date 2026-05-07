@@ -77,4 +77,21 @@ data class MaxWeightStat(val exerciseName: String, val maxWeight: Int)
 @Database(entities = [ExerciseEntity::class, RoutineEntity::class, WorkoutHistoryEntity::class, WeightEntity::class], version = 5)
 abstract class GymDatabase : RoomDatabase() {
     abstract fun gymDao(): GymDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: GymDatabase? = null
+
+        fun getDatabase(context: android.content.Context): GymDatabase {
+            return INSTANCE ?: synchronized(this) {
+                val instance = androidx.room.Room.databaseBuilder(
+                    context.applicationContext,
+                    GymDatabase::class.java,
+                    "gym_database"
+                ).fallbackToDestructiveMigration(true).build()
+                INSTANCE = instance
+                instance
+            }
+        }
+    }
 }

@@ -1,6 +1,6 @@
 package com.example.Gym_App.ui.screens
 
-import android.content.ClipboardManager
+import android.content.ClipData
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -25,9 +24,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -38,6 +37,7 @@ import com.example.Gym_App.ui.components.BottomNavBar
 import com.example.Gym_App.ui.components.MenuButton
 import com.example.Gym_App.ui.components.NumericStepper
 import com.example.Gym_App.viewmodel.GymViewModel
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -71,6 +71,16 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
     val showRestoreConfirm = remember { mutableStateOf(false) }
     val showDatePicker = remember { mutableStateOf(false) }
     val showColorPicker = remember { mutableStateOf<String?>(null) } // "top" or "bottom"
+
+    var notificationsEnabled by remember { mutableStateOf(prefs.getBoolean("notifications_enabled", false)) }
+    var dailyReminderHour by remember { mutableIntStateOf(prefs.getInt("daily_reminder_hour", 8)) }
+    var dailyReminderMinute by remember { mutableIntStateOf(prefs.getInt("daily_reminder_minute", 0)) }
+    var maxDaysWithoutWorkout by remember { mutableIntStateOf(prefs.getInt("max_days_without_workout", 3)) }
+    var prNotificationsEnabled by remember { mutableStateOf(prefs.getBoolean("pr_notifications_enabled", true)) }
+    var consistencyNotificationsEnabled by remember { mutableStateOf(prefs.getBoolean("consistency_notifications_enabled", true)) }
+    var weeklyGoalNotificationsEnabled by remember { mutableStateOf(prefs.getBoolean("weekly_goal_notifications_enabled", true)) }
+    var weeklyWorkoutGoal by remember { mutableIntStateOf(prefs.getInt("weekly_workout_goal", 3)) }
+    var showTimePicker by remember { mutableStateOf(false) }
 
     val datePickerState = rememberDatePickerState(
         initialSelectedDateMillis = if (birthDateMillis != 0L) birthDateMillis else null,
@@ -232,12 +242,186 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
                 NumericStepper("Tiempo de preparación previa (s)", globalWait, 5, 10) { globalWait = it; prefs.edit { putInt("globalWait", it) } }
                 
                 Spacer(Modifier.height(24.dp))
+                HorizontalDivider(color = Color.Gray.copy(0.3f))
+                Spacer(Modifier.height(24.dp))
+
+                Text("Notificaciones", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+                Spacer(Modifier.height(16.dp))
+
+                // Toggle principal de notificaciones
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Habilitar notificaciones", color = Color.White, fontSize = 16.sp)
+                    Spacer(Modifier.weight(1f))
+                    Switch(
+                        checked = notificationsEnabled,
+                        onCheckedChange = {
+                            notificationsEnabled = it
+                            prefs.edit { putBoolean("notifications_enabled", it) }
+                            viewModel.updateNotificationSettings(
+                                enabled = it,
+                                dailyHour = dailyReminderHour,
+                                dailyMinute = dailyReminderMinute,
+                                maxDaysWithoutWorkout = maxDaysWithoutWorkout,
+                                prEnabled = prNotificationsEnabled,
+                                consistencyEnabled = consistencyNotificationsEnabled,
+                                weeklyGoalEnabled = weeklyGoalNotificationsEnabled,
+                                weeklyGoal = weeklyWorkoutGoal
+                            )
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color(0xFF00FF00),
+                            checkedTrackColor = Color(0xFF00FF00).copy(0.5f)
+                        )
+                    )
+                }
+
+                if (notificationsEnabled) {
+                    Spacer(Modifier.height(16.dp))
+
+                    // Recordatorio diario
+                    Card(
+                        Modifier.fillMaxWidth().clickable { showTimePicker = true },
+                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
+                        border = BorderStroke(1.dp, Color.Gray.copy(0.3f))
+                    ) {
+                        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CalendarMonth, null, tint = Color(0xFF00FF00))
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text("Recordatorio diario", color = Color.White, fontSize = 16.sp)
+                                Text("${String.format(Locale.getDefault(), "%02d", dailyReminderHour)}:${String.format(Locale.getDefault(), "%02d", dailyReminderMinute)}", color = Color.Gray, fontSize = 14.sp)
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Máximo días sin entrenar
+                    NumericStepper("Días sin entrenar para notificar", maxDaysWithoutWorkout, 1, 1) {
+                        maxDaysWithoutWorkout = it
+                        prefs.edit { putInt("max_days_without_workout", it) }
+                        viewModel.updateNotificationSettings(
+                            enabled = notificationsEnabled,
+                            dailyHour = dailyReminderHour,
+                            dailyMinute = dailyReminderMinute,
+                            maxDaysWithoutWorkout = it,
+                            prEnabled = prNotificationsEnabled,
+                            consistencyEnabled = consistencyNotificationsEnabled,
+                            weeklyGoalEnabled = weeklyGoalNotificationsEnabled,
+                            weeklyGoal = weeklyWorkoutGoal
+                        )
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Objetivo semanal
+                    NumericStepper("Objetivo semanal (entrenamientos)", weeklyWorkoutGoal, 1, 1) {
+                        weeklyWorkoutGoal = it
+                        prefs.edit { putInt("weekly_workout_goal", it) }
+                        viewModel.updateNotificationSettings(
+                            enabled = notificationsEnabled,
+                            dailyHour = dailyReminderHour,
+                            dailyMinute = dailyReminderMinute,
+                            maxDaysWithoutWorkout = maxDaysWithoutWorkout,
+                            prEnabled = prNotificationsEnabled,
+                            consistencyEnabled = consistencyNotificationsEnabled,
+                            weeklyGoalEnabled = weeklyGoalNotificationsEnabled,
+                            weeklyGoal = it
+                        )
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Tipos de notificaciones
+                    Text("Tipos de notificaciones:", color = Color.Gray, fontSize = 14.sp, modifier = Modifier.align(Alignment.Start))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Nuevos PRs", color = Color.White, fontSize = 14.sp)
+                        Spacer(Modifier.weight(1f))
+                        Switch(
+                            checked = prNotificationsEnabled,
+                            onCheckedChange = {
+                                prNotificationsEnabled = it
+                                prefs.edit { putBoolean("pr_notifications_enabled", it) }
+                                viewModel.updateNotificationSettings(
+                                    enabled = notificationsEnabled,
+                                    dailyHour = dailyReminderHour,
+                                    dailyMinute = dailyReminderMinute,
+                                    maxDaysWithoutWorkout = maxDaysWithoutWorkout,
+                                    prEnabled = it,
+                                    consistencyEnabled = consistencyNotificationsEnabled,
+                                    weeklyGoalEnabled = weeklyGoalNotificationsEnabled,
+                                    weeklyGoal = weeklyWorkoutGoal
+                                )
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFFBB86FC),
+                                checkedTrackColor = Color(0xFFBB86FC).copy(0.5f)
+                            )
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Consistencia", color = Color.White, fontSize = 14.sp)
+                        Spacer(Modifier.weight(1f))
+                        Switch(
+                            checked = consistencyNotificationsEnabled,
+                            onCheckedChange = {
+                                consistencyNotificationsEnabled = it
+                                prefs.edit { putBoolean("consistency_notifications_enabled", it) }
+                                viewModel.updateNotificationSettings(
+                                    enabled = notificationsEnabled,
+                                    dailyHour = dailyReminderHour,
+                                    dailyMinute = dailyReminderMinute,
+                                    maxDaysWithoutWorkout = maxDaysWithoutWorkout,
+                                    prEnabled = prNotificationsEnabled,
+                                    consistencyEnabled = it,
+                                    weeklyGoalEnabled = weeklyGoalNotificationsEnabled,
+                                    weeklyGoal = weeklyWorkoutGoal
+                                )
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFFBB86FC),
+                                checkedTrackColor = Color(0xFFBB86FC).copy(0.5f)
+                            )
+                        )
+                    }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Objetivo semanal", color = Color.White, fontSize = 14.sp)
+                        Spacer(Modifier.weight(1f))
+                        Switch(
+                            checked = weeklyGoalNotificationsEnabled,
+                            onCheckedChange = {
+                                weeklyGoalNotificationsEnabled = it
+                                prefs.edit { putBoolean("weekly_goal_notifications_enabled", it) }
+                                viewModel.updateNotificationSettings(
+                                    enabled = notificationsEnabled,
+                                    dailyHour = dailyReminderHour,
+                                    dailyMinute = dailyReminderMinute,
+                                    maxDaysWithoutWorkout = maxDaysWithoutWorkout,
+                                    prEnabled = prNotificationsEnabled,
+                                    consistencyEnabled = consistencyNotificationsEnabled,
+                                    weeklyGoalEnabled = it,
+                                    weeklyGoal = weeklyWorkoutGoal
+                                )
+                            },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color(0xFFBB86FC),
+                                checkedTrackColor = Color(0xFFBB86FC).copy(0.5f)
+                            )
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
                 Text("Soporte Técnico", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
                 Spacer(Modifier.height(16.dp))
                 
                 val lastError = remember { prefs.getString("last_error", null) }
-                val clipboardManager = LocalClipboardManager.current
-                
+                val clipboardManager = LocalClipboard.current
+                val scope = rememberCoroutineScope()
+
                 Card(
                     Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
@@ -249,7 +433,9 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
                             Spacer(Modifier.weight(1f))
                             if (lastError != null) {
                                 IconButton(onClick = {
-                                    clipboardManager.setText(AnnotatedString(lastError))
+                                    scope.launch {
+                                        clipboardManager.setClipEntry(ClipEntry(ClipData.newPlainText("Error Log", lastError)))
+                                    }
                                     Toast.makeText(context, "Copiado al portapapeles", Toast.LENGTH_SHORT).show()
                                 }) {
                                     Icon(Icons.Default.ContentCopy, "Copiar", tint = Color(0xFF00FF00), modifier = Modifier.size(20.dp))
@@ -424,6 +610,15 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
                     selectedTopColor = Color.Black.toArgb()
                     selectedBottomColor = Color(0xFF424242).toArgb()
                     
+                    notificationsEnabled = false
+                    dailyReminderHour = 8
+                    dailyReminderMinute = 0
+                    maxDaysWithoutWorkout = 3
+                    prNotificationsEnabled = true
+                    consistencyNotificationsEnabled = true
+                    weeklyGoalNotificationsEnabled = true
+                    weeklyWorkoutGoal = 3
+                    
                     viewModel.resetEverything()
                     viewModel.restoreDefaultExercises(keepCustom = false)
                     
@@ -433,6 +628,59 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showResetConfirm.value = false }) { Text("CANCELAR", color = Color.Gray) }
+            }
+        )
+    }
+
+    if (showTimePicker) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = dailyReminderHour,
+            initialMinute = dailyReminderMinute,
+            is24Hour = true
+        )
+
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            containerColor = Color(0xFF1A1C20),
+            title = { Text("Seleccionar hora del recordatorio", color = Color.White) },
+            text = {
+                TimePicker(
+                    state = timePickerState,
+                    colors = TimePickerDefaults.colors(
+                        clockDialColor = Color.White.copy(0.1f),
+                        clockDialSelectedContentColor = Color(0xFF00FF00),
+                        clockDialUnselectedContentColor = Color.White,
+                        selectorColor = Color(0xFF00FF00),
+                        timeSelectorSelectedContainerColor = Color(0xFF00FF00),
+                        timeSelectorUnselectedContainerColor = Color.White.copy(0.1f),
+                        timeSelectorSelectedContentColor = Color.Black,
+                        timeSelectorUnselectedContentColor = Color.White
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    dailyReminderHour = timePickerState.hour
+                    dailyReminderMinute = timePickerState.minute
+                    prefs.edit {
+                        putInt("daily_reminder_hour", dailyReminderHour)
+                        putInt("daily_reminder_minute", dailyReminderMinute)
+                    }
+                    viewModel.updateNotificationSettings(
+                        enabled = notificationsEnabled,
+                        dailyHour = dailyReminderHour,
+                        dailyMinute = dailyReminderMinute,
+                        maxDaysWithoutWorkout = maxDaysWithoutWorkout,
+                        prEnabled = prNotificationsEnabled,
+                        consistencyEnabled = consistencyNotificationsEnabled,
+                        weeklyGoalEnabled = weeklyGoalNotificationsEnabled,
+                        weeklyGoal = weeklyWorkoutGoal
+                    )
+                    showTimePicker = false
+                }) { Text("ACEPTAR", color = Color(0xFF00FF00)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("CANCELAR", color = Color.Gray) }
             }
         )
     }

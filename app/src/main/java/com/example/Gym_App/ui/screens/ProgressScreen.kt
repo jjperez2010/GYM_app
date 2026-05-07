@@ -105,11 +105,34 @@ fun ProgressScreen(navController: NavController, viewModel: GymViewModel) {
 
 @Composable
 fun HeaderSection(compare: Boolean, weekly: Boolean, onCompare: () -> Unit, onWeekly: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Text("Tu Progreso", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-        Row {
-            IconButton(onClick = onWeekly) { Icon(Icons.Default.DateRange, null, tint = if (weekly) Color(0xFF00AAFF) else Color.White) }
-            IconButton(onClick = onCompare) { Icon(Icons.AutoMirrored.Filled.CompareArrows, null, tint = if (compare) Color(0xFF00FF00) else Color.White) }
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Text("Tu Progreso", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Botón Comparativa Semanal
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onWeekly() }.padding(8.dp)) {
+                    Icon(
+                        Icons.Default.DateRange, 
+                        null, 
+                        tint = if (weekly) Color(0xFF00AAFF) else Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text("Semanal", color = if (weekly) Color(0xFF00AAFF) else Color.Gray, fontSize = 9.sp)
+                }
+                
+                Spacer(Modifier.width(8.dp))
+
+                // Botón Modo Comparar
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable { onCompare() }.padding(8.dp)) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.CompareArrows, 
+                        null, 
+                        tint = if (compare) Color(0xFF00FF00) else Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text("Comparar", color = if (compare) Color(0xFF00FF00) else Color.Gray, fontSize = 9.sp)
+                }
+            }
         }
     }
 }

@@ -16,6 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.Gym_App.ui.screens.*
 import com.example.Gym_App.viewmodel.GymViewModel
 import com.example.Gym_App.ui.theme.AppDePruebaTheme
+import androidx.work.WorkManager
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,6 +32,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             AppDePruebaTheme {
+                // Crear el ViewModel con lazy initialization interna
                 val gymViewModel: GymViewModel = viewModel(factory = object : androidx.lifecycle.ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
