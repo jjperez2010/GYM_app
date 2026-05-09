@@ -41,7 +41,7 @@ fun RoutinesScreen(navController: NavController, viewModel: GymViewModel) {
     val allExercisesEntity by viewModel.exercises.collectAsState()
     
     val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, muscleGroup = it.muscleGroup) }
-    val routinesList = routinesEntity.map { Routine(it.name, it.exerciseNames.split(",")) }
+    val routinesList = routinesEntity.map { Routine(it.name, it.exerciseNames.split(","), it.imageId) }
 
     var showForm by remember { mutableStateOf(false) }
     var editingIndex by remember { mutableStateOf<Int?>(null) }
@@ -53,11 +53,16 @@ fun RoutinesScreen(navController: NavController, viewModel: GymViewModel) {
                 Text("Rutinas", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(20.dp))
                 if (showForm) { 
-                    RoutineForm(allExercises, editingIndex?.let { routinesList[it] }, { showForm = false; editingIndex = null }, { 
+                    val currentEditingRoutine = editingIndex?.let { routinesList[it] }
+                    RoutineForm(allExercises, currentEditingRoutine, { showForm = false; editingIndex = null }, { 
                         editingIndex?.let { idx -> viewModel.deleteRoutine(routinesList[idx].name) }
                         showForm = false; editingIndex = null 
                     }, { newRoutine -> 
-                        viewModel.addRoutine(RoutineEntity(newRoutine.name, newRoutine.exerciseNames.joinToString(",")))
+                        // Si el nombre cambió, eliminar la antigua
+                        if (currentEditingRoutine != null && currentEditingRoutine.name != newRoutine.name) {
+                            viewModel.deleteRoutine(currentEditingRoutine.name)
+                        }
+                        viewModel.addRoutine(RoutineEntity(newRoutine.name, newRoutine.exerciseNames.joinToString(","), newRoutine.imageId))
                         showForm = false; editingIndex = null 
                     }) 
                 }

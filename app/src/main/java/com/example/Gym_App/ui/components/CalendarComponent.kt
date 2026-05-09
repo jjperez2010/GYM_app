@@ -62,60 +62,127 @@ fun ConsistencyCalendar(workoutDates: List<LocalDate>, workoutHistory: List<Work
         count
     }
 
-    Card(
-        modifier = modifier.fillMaxWidth().padding(bottom = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
-        shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(0.1f))
-    ) {
-        Column(Modifier.padding(10.dp)) {
-            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(viewMonth.month.getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es")).replaceFirstChar { it.uppercase() }, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Text(" ${viewMonth.year}", color = Color.White.copy(0.5f), fontSize = 13.sp)
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.LocalFireDepartment, null, tint = Color(0xFFFFA500), modifier = Modifier.size(14.dp))
-                    Text("$streak", color = Color(0xFFFFA500), fontWeight = FontWeight.Black, fontSize = 13.sp)
-                    Spacer(Modifier.width(8.dp))
-                    IconButton(onClick = { viewMonth = viewMonth.minusMonths(1) }, modifier = Modifier.size(26.dp)) { 
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, modifier = Modifier.size(18.dp), tint = Color.White) 
-                    }
-                    IconButton(onClick = { viewMonth = viewMonth.plusMonths(1) }, modifier = Modifier.size(26.dp)) { 
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.size(18.dp), tint = Color.White) 
-                    }
-                }
-            }
+    val prefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("AppPrefs", android.content.Context.MODE_PRIVATE)
+    val userName = prefs.getString("userName", "") ?: ""
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    val greeting = when (hour) {
+        in 5..12 -> "¡Buenos días!"
+        in 13..19 -> "¡Buenas tardes!"
+        else -> "¡Buenas noches!"
+    }
 
-            Spacer(Modifier.height(6.dp))
-            Row(Modifier.fillMaxWidth()) {
-                listOf("D", "L", "M", "M", "J", "V", "S").forEach { day ->
-                    Text(day, Modifier.weight(1f), color = Color.White.copy(0.3f), fontSize = 10.sp, textAlign = TextAlign.Center)
-                }
-            }
-
+    Column(modifier = modifier.fillMaxWidth()) {
+        // Encabezado con Saludo y Racha
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Column {
-                var currentSlot = 0
-                for (row in 0..5) {
-                    if (currentSlot >= totalSlots) break
-                    Row(Modifier.fillMaxWidth()) {
-                        for (col in 0..6) {
-                            val dayNumber = currentSlot - firstDayOfMonth + 1
-                            Box(Modifier.weight(1f).aspectRatio(1.4f), Alignment.Center) {
-                                if (dayNumber in 1..daysInMonth) {
-                                    val date = viewMonth.atDay(dayNumber)
-                                    val hasWorkout = workoutDates.contains(date)
-                                    val isToday = date == LocalDate.now()
-                                    Box(
-                                        Modifier.size(24.dp).clip(CircleShape).background(if (hasWorkout) Color(0xFF00FF00) else if (isToday) Color.White.copy(0.1f) else Color.Transparent)
-                                            .clickable { if (hasWorkout) selectedDateForHistory = date },
-                                        Alignment.Center
-                                    ) {
-                                        Text(dayNumber.toString(), color = if (hasWorkout) Color.Black else Color.White, fontSize = 11.sp, fontWeight = if (hasWorkout || isToday) FontWeight.Bold else FontWeight.Normal)
+                Text(
+                    text = if (userName.isNotBlank()) "$greeting $userName! 💪" else "$greeting 💪",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Black
+                )
+                Text(
+                    text = "Listo para entrenar hoy",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.LocalFireDepartment, 
+                        null, 
+                        tint = Color(0xFFC6FF00), 
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = "$streak",
+                        color = Color.White,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+                Text("racha", color = Color.Gray, fontSize = 10.sp)
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C20).copy(0.8f)),
+            shape = RoundedCornerShape(16.dp),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(0.05f))
+        ) {
+            Column(Modifier.padding(16.dp)) {
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween, Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = viewMonth.month.getDisplayName(TextStyle.FULL, Locale.forLanguageTag("es")).replaceFirstChar { it.uppercase() }, 
+                            color = Color.White, 
+                            fontSize = 18.sp, 
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(" ${viewMonth.year}", color = Color(0xFFC6FF00), fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    }
+                    Row {
+                        IconButton(onClick = { viewMonth = viewMonth.minusMonths(1) }, modifier = Modifier.size(32.dp)) { 
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, null, tint = Color.White) 
+                        }
+                        IconButton(onClick = { viewMonth = viewMonth.plusMonths(1) }, modifier = Modifier.size(32.dp)) { 
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color.White) 
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
+                Row(Modifier.fillMaxWidth()) {
+                    listOf("D", "L", "M", "M", "J", "V", "S").forEach { day ->
+                        Text(day, Modifier.weight(1f), color = Color.Gray, fontSize = 11.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Column {
+                    var currentSlot = 0
+                    for (row in 0..5) {
+                        if (currentSlot >= totalSlots) break
+                        Row(Modifier.fillMaxWidth()) {
+                            for (col in 0..6) {
+                                val dayNumber = currentSlot - firstDayOfMonth + 1
+                                Box(Modifier.weight(1f).aspectRatio(1.2f), Alignment.Center) {
+                                    if (dayNumber in 1..daysInMonth) {
+                                        val date = viewMonth.atDay(dayNumber)
+                                        val hasWorkout = workoutDates.contains(date)
+                                        val isToday = date == LocalDate.now()
+                                        
+                                        Surface(
+                                            modifier = Modifier.size(28.dp).clickable { if (hasWorkout) selectedDateForHistory = date },
+                                            shape = CircleShape,
+                                            color = when {
+                                                hasWorkout -> Color(0xFFC6FF00)
+                                                isToday -> Color.White.copy(0.1f)
+                                                else -> Color.Transparent
+                                            },
+                                            border = if (isToday && !hasWorkout) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFC6FF00)) else null
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text(
+                                                    text = dayNumber.toString(), 
+                                                    color = if (hasWorkout) Color.Black else Color.White, 
+                                                    fontSize = 12.sp, 
+                                                    fontWeight = if (hasWorkout || isToday) FontWeight.Black else FontWeight.Normal
+                                                )
+                                                if (hasWorkout && isToday) {
+                                                    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).size(3.dp).background(Color.Black, CircleShape))
+                                                }
+                                            }
+                                        }
                                     }
                                 }
+                                currentSlot++
                             }
-                            currentSlot++
                         }
                     }
                 }

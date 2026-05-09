@@ -14,5 +14,6 @@ data class Exercise(
 
 data class Routine(
     val name: String,
-    val exerciseNames: List<String>
+    val exerciseNames: List<String>,
+    val imageId: String = "default"
 )

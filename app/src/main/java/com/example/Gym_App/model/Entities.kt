@@ -20,7 +20,8 @@ data class ExerciseEntity(
 @Entity(tableName = "routines")
 data class RoutineEntity(
     @PrimaryKey val name: String,
-    val exerciseNames: String // CSV of exercise names
+    val exerciseNames: String, // CSV of exercise names
+    val imageId: String = "default" // Nombre identificador de la imagen (pecho, espalda, etc.)
 )
 
 @Entity(tableName = "workout_history")
