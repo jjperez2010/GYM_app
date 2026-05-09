@@ -31,8 +31,17 @@ import com.example.Gym_App.ui.components.BottomNavBar
 import com.example.Gym_App.ui.components.MenuButton
 import com.example.Gym_App.ui.components.RoutineForm
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import android.graphics.BitmapFactory
+import androidx.core.net.toUri
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
+
 @Composable
-fun RoutinesScreen(navController: NavController, viewModel: GymViewModel) {
+fun RoutinesScreen(navController: NavController, viewModel: GymViewModel, initialEditName: String? = null) {
     val context = LocalContext.current
     val prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
     val selectedGradientColor = prefs.getInt("trainingGradientColor", Color(0xFF424242).toArgb())
@@ -40,11 +49,22 @@ fun RoutinesScreen(navController: NavController, viewModel: GymViewModel) {
     val routinesEntity by viewModel.routines.collectAsState()
     val allExercisesEntity by viewModel.exercises.collectAsState()
     
-    val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, muscleGroup = it.muscleGroup) }
-    val routinesList = routinesEntity.map { Routine(it.name, it.exerciseNames.split(","), it.imageId) }
+    val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, it.duration, it.muscleGroup) }
+    val routinesList = routinesEntity.map { Routine(it.name, it.exerciseNames.split(","), it.imageId, it.customImageUri) }
 
-    var showForm by remember { mutableStateOf(false) }
+    var showForm by remember { mutableStateOf(initialEditName != null) }
     var editingIndex by remember { mutableStateOf<Int?>(null) }
+
+    // Sincronizar el estado inicial de edición si se pasa un nombre
+    LaunchedEffect(initialEditName, routinesList) {
+        if (initialEditName != null && editingIndex == null && routinesList.isNotEmpty()) {
+            val index = routinesList.indexOfFirst { it.name == initialEditName }
+            if (index != -1) {
+                editingIndex = index
+                showForm = true
+            }
+        }
+    }
 
     Scaffold(bottomBar = { BottomNavBar(navController, "rutinas") }) { innerPadding ->
         val gradientRoutine = Brush.verticalGradient(listOf(Color.Black, Color.Black, Color(selectedGradientColor)))
@@ -58,55 +78,77 @@ fun RoutinesScreen(navController: NavController, viewModel: GymViewModel) {
                         editingIndex?.let { idx -> viewModel.deleteRoutine(routinesList[idx].name) }
                         showForm = false; editingIndex = null 
                     }, { newRoutine -> 
-                        // Si el nombre cambió, eliminar la antigua
                         if (currentEditingRoutine != null && currentEditingRoutine.name != newRoutine.name) {
                             viewModel.deleteRoutine(currentEditingRoutine.name)
                         }
-                        viewModel.addRoutine(RoutineEntity(newRoutine.name, newRoutine.exerciseNames.joinToString(","), newRoutine.imageId))
+                        viewModel.addRoutine(RoutineEntity(newRoutine.name, newRoutine.exerciseNames.joinToString(","), newRoutine.imageId, newRoutine.customImageUri))
                         showForm = false; editingIndex = null 
                     }) 
                 }
                 else { 
                     MenuButton("Crear Nueva Rutina", bColor = Color(0xFFBB86FC)) { showForm = true }
                     Spacer(Modifier.height(16.dp))
-                    LazyColumn(Modifier.fillMaxWidth().weight(1f)) { 
+                    LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { 
                         itemsIndexed(routinesList) { index, routine -> 
-                            // Cálculo detallado de la rutina:
-                            // (preparación + ejecución + descansos) de cada ejercicio + 10s transición entre ejercicios
                             val routineExs = routine.exerciseNames.mapNotNull { name -> allExercises.find { it.name == name } }
-                            val totalSecs = routineExs.sumOf { ex -> 
-                                val prep = 20
-                                val exec = ex.sets * ex.duration
-                                val rest = (ex.sets - 1) * ex.rest
-                                prep + exec + rest
-                            } + (if (routineExs.size > 1) (routineExs.size - 1) * 15 else 0)
-                            
-                            val totalMin = totalSecs / 60
-                            val muscleSum = routineExs.map { it.muscleGroup }.distinct().take(2).joinToString(", ")
+                            val totalMinutes = (routineExs.sumOf { it.sets * 60 + (it.sets - 1) * it.rest }) / 60
+                            val muscles = routineExs.map { it.muscleGroup }.distinct().take(2).joinToString(", ")
 
                             Card(
-                                Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { editingIndex = index; showForm = true }, 
-                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.1f)), 
-                                border = BorderStroke(1.dp, Color(0xFFBB86FC).copy(0.5f))
-                            ) { 
-                                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) { 
-                                    Column(Modifier.weight(1f)) { 
-                                        Text(routine.name, color = Color(0xFFBB86FC), fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("${routine.exerciseNames.size} ej", color = Color.White.copy(0.6f), fontSize = 12.sp)
-                                            Spacer(Modifier.width(8.dp))
-                                            Box(Modifier.size(3.dp).background(Color.Gray, CircleShape))
-                                            Spacer(Modifier.width(8.dp))
-                                            Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(12.dp))
-                                            Text(" ~${totalMin} min", color = Color.Gray, fontSize = 12.sp)
+                                modifier = Modifier.fillMaxWidth().height(140.dp).clickable { editingIndex = index; showForm = true },
+                                shape = RoundedCornerShape(20.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C20))
+                            ) {
+                                Box(Modifier.fillMaxSize()) {
+                                    if (routine.customImageUri != null) {
+                                        val bitmap = remember(routine.customImageUri) {
+                                            try {
+                                                context.contentResolver.openInputStream(routine.customImageUri.toUri())?.use {
+                                                    BitmapFactory.decodeStream(it)
+                                                }
+                                            } catch (_: Exception) { null }
                                         }
-                                        if (muscleSum.isNotEmpty()) {
-                                            Text(muscleSum, color = Color(0xFF00FF00).copy(0.7f), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                                        bitmap?.let {
+                                            Image(
+                                                painter = BitmapPainter(it.asImageBitmap()),
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                                alpha = 0.5f
+                                            )
+                                        }
+                                    } else {
+                                        val resId = context.resources.getIdentifier(routine.imageId, "drawable", context.packageName)
+                                        if (resId != 0) {
+                                            Image(
+                                                painter = androidx.compose.ui.res.painterResource(id = resId),
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                                alpha = 0.5f
+                                            )
                                         }
                                     }
-                                    Icon(Icons.Default.ChevronRight, null, tint = Color.Gray) 
-                                } 
-                            } 
+
+                                    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Black.copy(0.9f), Color.Transparent))))
+                                    
+                                    Row(Modifier.fillMaxSize().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text(routine.name, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text(muscles, color = Color(0xFFC6FF00), fontSize = 12.sp)
+                                            Spacer(Modifier.height(8.dp))
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(14.dp))
+                                                Spacer(Modifier.width(4.dp))
+                                                Text("$totalMinutes min", color = Color.Gray, fontSize = 12.sp)
+                                                Spacer(Modifier.width(12.dp))
+                                                Text("${routine.exerciseNames.size} ejercicios", color = Color.Gray, fontSize = 12.sp)
+                                            }
+                                        }
+                                        Icon(Icons.Default.ChevronRight, null, tint = Color.White.copy(0.5f))
+                                    }
+                                }
+                            }
                         } 
                     } 
                 }

@@ -34,6 +34,12 @@ import com.example.Gym_App.ui.components.BottomNavBar
 import com.example.Gym_App.ui.components.ExerciseForm
 import com.example.Gym_App.ui.components.MenuButton
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.core.net.toUri
+import androidx.compose.ui.layout.ContentScale
+import android.graphics.BitmapFactory
+
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ExercisesScreen(navController: NavController, viewModel: GymViewModel) {
@@ -193,51 +199,61 @@ fun ExercisesScreen(navController: NavController, viewModel: GymViewModel) {
                             Text("No se encontraron ejercicios", color = Color.Gray)
                         }
                     } else {
-                        LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+                        LazyColumn(Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             items(filteredExercises) { ex ->
-                                // Cálculo de tiempo detallado:
-                                // preparacion (20s) + (sets * duration del usuario) + ((sets - 1) * rest)
-                                val prepTime = 20
-                                val executionTime = ex.sets * ex.duration
-                                val totalRest = (ex.sets - 1) * ex.rest
-                                val totalSecs = prepTime + executionTime + totalRest
-                                val totalMin = totalSecs / 60
-                                val totalRemainder = totalSecs % 60
-                                
+                                val totalMin = (ex.sets * ex.duration + (ex.sets - 1) * ex.rest) / 60
                                 val isOverdue = ex.updateReminderDays > 0 && ex.lastUpdateDate > 0 && 
                                     (System.currentTimeMillis() - ex.lastUpdateDate) > (ex.updateReminderDays.toLong() * 24 * 60 * 60 * 1000)
 
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { 
+                                    modifier = Modifier.fillMaxWidth().height(100.dp).clickable { 
                                         editingExercise = ex
                                         showForm = true
                                     },
-                                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
-                                    border = BorderStroke(if (isOverdue) 2.dp else 0.5.dp, if (isOverdue) Color.Yellow else Color.White.copy(0.1f))
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C20)),
+                                    border = if (isOverdue) BorderStroke(1.5.dp, Color.Yellow) else BorderStroke(0.5.dp, Color.White.copy(0.1f))
                                 ) {
-                                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        Column(Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(ex.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                                if (isOverdue) {
-                                                    Icon(Icons.Default.Timer, "Subir carga", tint = Color.Yellow, modifier = Modifier.size(16.dp))
-                                                    Spacer(Modifier.width(4.dp))
-                                                    Text("SUBIR CARGA", color = Color.Yellow, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    Box(Modifier.fillMaxSize()) {
+                                        // Imagen de fondo basada en grupo muscular
+                                        val imageName = ex.muscleGroup.lowercase()
+                                            .replace("í", "i").replace("é", "e").replace("á", "a")
+                                            .replace("ó", "o").replace("ú", "u")
+                                        val resId = context.resources.getIdentifier(imageName, "drawable", context.packageName)
+                                        
+                                        if (resId != 0) {
+                                            Image(
+                                                painter = androidx.compose.ui.res.painterResource(id = resId),
+                                                contentDescription = null,
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentScale = ContentScale.Crop,
+                                                alpha = 0.4f
+                                            )
+                                        }
+
+                                        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color.Black.copy(0.85f), Color.Transparent))))
+
+                                        Row(Modifier.fillMaxSize().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                            Column(Modifier.weight(1f)) {
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(ex.name, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                                    if (isOverdue) {
+                                                        Spacer(Modifier.width(8.dp))
+                                                        Icon(Icons.Default.Timer, null, tint = Color.Yellow, modifier = Modifier.size(14.dp))
+                                                    }
+                                                }
+                                                Text("${ex.sets}x${ex.reps} — ${ex.weight}kg", color = Color(0xFFC6FF00), fontSize = 14.sp, fontWeight = FontWeight.Black)
+                                                
+                                                Row(Modifier.padding(top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                    Text(ex.muscleGroup, color = Color.White.copy(0.6f), fontSize = 11.sp)
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(10.dp))
+                                                    Text(" ${totalMin}m", color = Color.Gray, fontSize = 11.sp)
                                                 }
                                             }
-                                            // Parámetros debajo del nombre
-                                            Text("${ex.sets} series x ${ex.reps} reps — ${ex.weight}kg", color = Color(0xFF00FF00), fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                                            
-                                            Spacer(Modifier.height(4.dp))
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(ex.muscleGroup, color = Color.White.copy(0.6f), fontSize = 12.sp)
-                                                Spacer(Modifier.width(8.dp))
-                                                Box(Modifier.size(3.dp).background(Color.Gray, CircleShape))
-                                                Spacer(Modifier.width(8.dp))
-                                                Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(12.dp))
-                                                Text(" ${totalMin}m ${totalRemainder}s", color = Color.Gray, fontSize = 12.sp)
+                                            IconButton(onClick = { editingExercise = ex; showForm = true }) {
+                                                Icon(Icons.Default.FilterAlt, null, tint = Color.White.copy(0.3f))
                                             }
-                                            Text("Material: ${ex.equipmentType}", color = Color.Gray, fontSize = 11.sp)
                                         }
                                     }
                                 }

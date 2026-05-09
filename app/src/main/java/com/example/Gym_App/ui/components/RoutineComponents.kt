@@ -19,6 +19,14 @@ import androidx.compose.ui.text.font.FontWeight
 import com.example.Gym_App.model.Exercise
 import com.example.Gym_App.model.Routine
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.example.Gym_App.utils.ImageStorage
+import androidx.compose.ui.graphics.asImageBitmap
+import android.graphics.BitmapFactory
+import java.io.File
+import android.net.Uri
+
 @Composable
 fun RoutineForm(
     allExercises: List<Exercise>,
@@ -27,16 +35,51 @@ fun RoutineForm(
     onDelete: () -> Unit,
     onSave: (Routine) -> Unit
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf(initialRoutine?.name ?: "") }
     var selectedImageId by remember { mutableStateOf(initialRoutine?.imageId ?: "default") }
+    var customImageUri by remember { mutableStateOf(initialRoutine?.customImageUri) }
     val selected = remember { mutableStateListOf<String>().apply { if (initialRoutine != null) addAll(initialRoutine.exerciseNames) } }
+    
+    val savedImages = remember { mutableStateListOf<File>().apply { addAll(ImageStorage.getAllImages(context)) } }
+
+    val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let { 
+            val savedPath = ImageStorage.saveImage(context, it)
+            if (savedPath != null) {
+                customImageUri = savedPath
+                savedImages.clear()
+                savedImages.addAll(ImageStorage.getAllImages(context))
+            }
+        }
+    }
+    
+    // Auto-detección de imagen por predominancia
+    LaunchedEffect(selected.toList()) {
+        if (selected.isNotEmpty()) {
+            val muscles = selected.mapNotNull { name -> allExercises.find { it.name == name }?.muscleGroup }
+            if (muscles.isNotEmpty()) {
+                val mostCommon = muscles.groupingBy { it }.eachCount().maxBy { it.value }.key
+                val mappedId = when (mostCommon.lowercase()) {
+                    "pecho" -> "pecho"
+                    "espalda" -> "espalda"
+                    "bíceps", "biceps" -> "biceps"
+                    "tríceps", "triceps" -> "triceps"
+                    "hombros" -> "hombros"
+                    "pierna", "cuádriceps", "isquios", "glúteos" -> "cuadriceps"
+                    else -> "default"
+                }
+                if (selectedImageId == "default" || selectedImageId == "") {
+                   selectedImageId = mappedId
+                }
+            }
+        }
+    }
     
     val imageOptions = listOf(
         "pecho" to "Pecho", "espalda" to "Espalda", "biceps" to "Bíceps",
-        "triceps" to "Tríceps", "hombros" to "Hombros", "cuadriceps" to "Cuádriceps",
-        "isquios" to "Isquios", "gluteos" to "Glúteos", "pantorrillas" to "Pantorrillas",
-        "abdominales" to "Abdominales", "antebrazos" to "Antebrazos", "core" to "Core",
-        "aductores" to "Aductores", "pecho_superior" to "Pecho Sup.", "lumbar" to "Lumbar"
+        "triceps" to "Tríceps", "hombros" to "Hombros", "cuadriceps" to "Piernas",
+        "abdominales" to "Abs", "core" to "Core"
     )
 
     Column(Modifier.fillMaxWidth()) {
@@ -48,7 +91,7 @@ fun RoutineForm(
             MenuButton("Cancelar", Modifier.weight(1f), bColor = Color.Gray) { onCancel() }
             Spacer(Modifier.width(8.dp))
             MenuButton("Guardar", Modifier.weight(1f), bColor = Color(0xFFBB86FC)) {
-                if (name.isNotBlank() && selected.isNotEmpty()) onSave(Routine(name, selected.toList(), selectedImageId))
+                if (name.isNotBlank() && selected.isNotEmpty()) onSave(Routine(name, selected.toList(), selectedImageId, customImageUri))
             }
         }
         
@@ -63,22 +106,62 @@ fun RoutineForm(
             Spacer(Modifier.height(16.dp))
 
             Text("Imagen de la Rutina", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            
+            Row(Modifier.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = { imageLauncher.launch("image/*") }, colors = ButtonDefaults.buttonColors(containerColor = Color.White.copy(0.1f))) {
+                    Text("Nueva Imagen", color = Color.White)
+                }
+                if (customImageUri != null) {
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { customImageUri = null }) { Text("Quitar personalizada", color = Color.Red) }
+                }
+            }
+
             androidx.compose.foundation.lazy.LazyRow(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Imágenes guardadas en almacenamiento interno
+                items(savedImages.size) { index ->
+                    val file = savedImages[index]
+                    val isSelected = customImageUri == file.absolutePath
+                    val bitmap = remember(file.absolutePath) { BitmapFactory.decodeFile(file.absolutePath) }
+
+                    Card(
+                        modifier = Modifier.width(100.dp).clickable { 
+                            customImageUri = file.absolutePath
+                            selectedImageId = "" 
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        border = if (isSelected) BorderStroke(2.dp, Color(0xFFC6FF00)) else BorderStroke(1.dp, Color.White.copy(0.1f))
+                    ) {
+                        Box(Modifier.fillMaxSize()) {
+                            bitmap?.let {
+                                Image(
+                                    painter = androidx.compose.ui.graphics.painter.BitmapPainter(it.asImageBitmap()),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().aspectRatio(1.2f),
+                                    contentScale = ContentScale.Crop
+                                )
+                            }
+                            if (isSelected) {
+                                Box(Modifier.fillMaxSize().background(Color(0xFFC6FF00).copy(0.2f)))
+                            }
+                        }
+                    }
+                }
+
+                // Imágenes predefinidas de Drawable
                 items(imageOptions.size) { index ->
                     val option = imageOptions[index]
-                    val isSelected = selectedImageId == option.first
+                    val isSelected = selectedImageId == option.first && customImageUri == null
                     
-                    // Intentar cargar el recurso por nombre
-                    val context = androidx.compose.ui.platform.LocalContext.current
                     val resId = context.resources.getIdentifier(option.first, "drawable", context.packageName)
                     
                     Card(
                         modifier = Modifier
-                            .width(120.dp)
-                            .clickable { selectedImageId = option.first },
+                            .width(100.dp)
+                            .clickable { selectedImageId = option.first; customImageUri = null },
                         shape = RoundedCornerShape(12.dp),
                         border = if (isSelected) BorderStroke(2.dp, Color(0xFFC6FF00)) else BorderStroke(1.dp, Color.White.copy(0.1f)),
                         colors = CardDefaults.cardColors(containerColor = Color.Black)
@@ -88,24 +171,12 @@ fun RoutineForm(
                                 Image(
                                     painter = painterResource(id = resId),
                                     contentDescription = option.second,
-                                    modifier = Modifier.fillMaxSize().aspectRatio(1.5f),
+                                    modifier = Modifier.fillMaxSize().aspectRatio(1.2f),
                                     contentScale = ContentScale.Crop
                                 )
                             }
-                            
-                            Box(
-                                Modifier.fillMaxSize()
-                                    .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.8f))))
-                                    .align(Alignment.BottomCenter)
-                                    .padding(8.dp)
-                            ) {
-                                Text(
-                                    option.second,
-                                    color = if (isSelected) Color(0xFFC6FF00) else Color.White,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                                    modifier = Modifier.align(Alignment.BottomCenter)
-                                )
+                            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.8f)))).padding(4.dp)) {
+                                Text(option.second, color = Color.White, fontSize = 10.sp, modifier = Modifier.align(Alignment.BottomCenter))
                             }
                         }
                     }
