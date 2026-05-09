@@ -9,13 +9,17 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.FormatSize
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -66,11 +70,17 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
     var selectedBottomColor by remember { 
         mutableIntStateOf(prefs.getInt("trainingGradientBottomColor", Color(0xFF424242).toArgb())) 
     }
+    var fontColor1 by remember { 
+        mutableIntStateOf(prefs.getInt("mainFontColor1", Color.White.toArgb())) 
+    }
+    var fontColor2 by remember { 
+        mutableIntStateOf(prefs.getInt("mainFontColor2", Color(0xFFC6FF00).toArgb())) 
+    }
 
     val showResetConfirm = remember { mutableStateOf(false) }
     val showRestoreConfirm = remember { mutableStateOf(false) }
     val showDatePicker = remember { mutableStateOf(false) }
-    val showColorPicker = remember { mutableStateOf<String?>(null) } // "top" or "bottom"
+    val showColorPicker = remember { mutableStateOf<String?>(null) } // "top", "bottom", "font1", "font2"
 
     var notificationsEnabled by remember { mutableStateOf(prefs.getBoolean("notifications_enabled", false)) }
     var dailyReminderHour by remember { mutableIntStateOf(prefs.getInt("daily_reminder_hour", 8)) }
@@ -217,6 +227,91 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
                         }
                         Spacer(Modifier.weight(1f))
                         Icon(Icons.Default.Palette, null, tint = Color.Gray)
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // Selector Color Fuente 1
+                Card(
+                    Modifier.fillMaxWidth().clickable { showColorPicker.value = "font1" },
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
+                    border = BorderStroke(1.dp, Color.Gray.copy(0.3f))
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(32.dp).clip(CircleShape).background(Color(fontColor1)).border(1.dp, Color.White, CircleShape))
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text("Color de Texto Principal", color = Color.White, fontSize = 16.sp)
+                            Text("Color para nombres y textos generales", color = Color.Gray, fontSize = 12.sp)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Default.FormatSize, null, tint = Color.Gray)
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Selector Color Fuente 2
+                Card(
+                    Modifier.fillMaxWidth().clickable { showColorPicker.value = "font2" },
+                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
+                    border = BorderStroke(1.dp, Color.Gray.copy(0.3f))
+                ) {
+                    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(32.dp).clip(CircleShape).background(Color(fontColor2)).border(1.dp, Color.White, CircleShape))
+                        Spacer(Modifier.width(16.dp))
+                        Column {
+                            Text("Color de Acento (Secundario)", color = Color.White, fontSize = 16.sp)
+                            Text("Color para valores y resaltados", color = Color.Gray, fontSize = 12.sp)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Default.FormatSize, null, tint = Color.Gray)
+                    }
+                }
+
+                Spacer(Modifier.height(24.dp))
+                Text("Presets de Estilo", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Start))
+                Spacer(Modifier.height(12.dp))
+
+                data class Preset(val name: String, val t: Int, val b: Int, val f1: Int, val f2: Int)
+                val presets = listOf(
+                    Preset("Classic", Color.Black.toArgb(), Color(0xFF424242).toArgb(), Color.White.toArgb(), Color(0xFFC6FF00).toArgb()),
+                    Preset("Cyber", Color.Black.toArgb(), Color(0xFF1A1A2E).toArgb(), Color.White.toArgb(), Color(0xFF00F5FF).toArgb()),
+                    Preset("Volcano", Color(0xFF2D0B0B).toArgb(), Color.Black.toArgb(), Color.White.toArgb(), Color(0xFFFF4D00).toArgb()),
+                    Preset("Forest", Color(0xFF002B15).toArgb(), Color.Black.toArgb(), Color(0xFFF5F5F5).toArgb(), Color(0xFF00FF88).toArgb()),
+                    Preset("Royal", Color.Black.toArgb(), Color(0xFF1A1A1A).toArgb(), Color(0xFFFFD700).toArgb(), Color(0xFFF5F5F5).toArgb())
+                )
+
+                LazyRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(presets) { p ->
+                        Column(
+                            Modifier.width(80.dp).clickable {
+                                selectedTopColor = p.t; selectedBottomColor = p.b; fontColor1 = p.f1; fontColor2 = p.f2
+                                prefs.edit { 
+                                    putInt("trainingGradientTopColor", p.t)
+                                    putInt("trainingGradientBottomColor", p.b)
+                                    putInt("mainFontColor1", p.f1)
+                                    putInt("mainFontColor2", p.f2)
+                                }
+                            },
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                Modifier.size(50.dp).clip(RoundedCornerShape(8.dp))
+                                    .background(Brush.verticalGradient(listOf(Color(p.t), Color(p.b))))
+                                    .border(1.dp, Color.White.copy(0.3f), RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Box(Modifier.size(10.dp).background(Color(p.f1), CircleShape))
+                                    Spacer(Modifier.height(4.dp))
+                                    Box(Modifier.size(10.dp).background(Color(p.f2), CircleShape))
+                                }
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(p.name, color = Color.White, fontSize = 11.sp)
+                        }
                     }
                 }
 
@@ -484,7 +579,14 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
         AlertDialog(
             onDismissRequest = { showColorPicker.value = null },
             containerColor = Color(0xFF1A1C20),
-            title = { Text(if (type == "top") "Color Superior" else "Color Inferior", color = Color.White) },
+            title = { 
+                Text(when(type) {
+                    "top" -> "Color Superior"
+                    "bottom" -> "Color Inferior"
+                    "font1" -> "Color Texto Principal"
+                    else -> "Color Acento"
+                }, color = Color.White) 
+            },
             text = {
                 Column {
                     Text("Selecciona un color de la paleta (64 colores):", color = Color.Gray, modifier = Modifier.padding(bottom = 16.dp))
@@ -497,7 +599,12 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     palette64.forEach { color ->
-                                        val currentColorInt = if (type == "top") selectedTopColor else selectedBottomColor
+                                        val currentColorInt = when(type) {
+                                            "top" -> selectedTopColor
+                                            "bottom" -> selectedBottomColor
+                                            "font1" -> fontColor1
+                                            else -> fontColor2
+                                        }
                                         Box(
                                             modifier = Modifier
                                                 .size(36.dp)
@@ -509,12 +616,23 @@ fun SettingsScreen(navController: NavController, viewModel: GymViewModel) {
                                                     shape = CircleShape
                                                 )
                                                 .clickable {
-                                                    if (type == "top") {
-                                                        selectedTopColor = color.toArgb()
-                                                        prefs.edit { putInt("trainingGradientTopColor", selectedTopColor) }
-                                                    } else {
-                                                        selectedBottomColor = color.toArgb()
-                                                        prefs.edit { putInt("trainingGradientBottomColor", selectedBottomColor) }
+                                                    when(type) {
+                                                        "top" -> {
+                                                            selectedTopColor = color.toArgb()
+                                                            prefs.edit { putInt("trainingGradientTopColor", selectedTopColor) }
+                                                        }
+                                                        "bottom" -> {
+                                                            selectedBottomColor = color.toArgb()
+                                                            prefs.edit { putInt("trainingGradientBottomColor", selectedBottomColor) }
+                                                        }
+                                                        "font1" -> {
+                                                            fontColor1 = color.toArgb()
+                                                            prefs.edit { putInt("mainFontColor1", fontColor1) }
+                                                        }
+                                                        "font2" -> {
+                                                            fontColor2 = color.toArgb()
+                                                            prefs.edit { putInt("mainFontColor2", fontColor2) }
+                                                        }
                                                     }
                                                 }
                                         )

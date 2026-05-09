@@ -31,8 +31,6 @@ fun BottomNavBar(navController: NavController, currentRoute: String, onNav: (() 
             verticalAlignment = Alignment.CenterVertically
         ) {
             NavItem(Icons.Default.Home, "Inicio", currentRoute == "menu") { onNav { if (currentRoute != "menu") navController.navigate("menu") } }
-            NavItem(Icons.Default.FitnessCenter, "Ejercicios", currentRoute == "ejercicios") { onNav { if (currentRoute != "ejercicios") navController.navigate("ejercicios") } }
-            NavItem(Icons.AutoMirrored.Filled.ListAlt, "Rutinas", currentRoute == "rutinas") { onNav { if (currentRoute != "rutinas") navController.navigate("rutinas") } }
             NavItem(Icons.Default.MonitorWeight, "Peso", currentRoute == "weight") { onNav { if (currentRoute != "weight") navController.navigate("weight") } }
             NavItem(Icons.Default.BarChart, "Progreso", currentRoute == "progress") { onNav { if (currentRoute != "progress") navController.navigate("progress") } }
             NavItem(Icons.Default.Settings, "Perfil", currentRoute == "settings") { onNav { if (currentRoute != "settings") navController.navigate("settings") } }

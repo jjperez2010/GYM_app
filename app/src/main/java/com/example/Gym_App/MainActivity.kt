@@ -48,12 +48,6 @@ class MainActivity : ComponentActivity() {
                 } else {
                     NavHost(navController = navController, startDestination = "menu") {
                         composable("menu") { MainScreen(navController, gymViewModel) }
-                        composable("ejercicios") { ExercisesScreen(navController, gymViewModel) }
-                        composable("rutinas") { RoutinesScreen(navController, gymViewModel, null) }
-                        composable("rutinas?edit={routineName}") { backStackEntry ->
-                            val routineName = backStackEntry.arguments?.getString("routineName")
-                            RoutinesScreen(navController, gymViewModel, routineName)
-                        }
                         composable("weight") { WeightScreen(navController, gymViewModel) }
                         composable("progress") { ProgressScreen(navController, gymViewModel) }
                         composable("settings") { SettingsScreen(navController, gymViewModel) }

@@ -72,7 +72,7 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
     val workoutDates by viewModel.workoutDates.collectAsState()
     val workoutHistory by viewModel.history.collectAsState()
     
-    val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, it.duration, it.muscleGroup) }
+    val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, it.duration, it.muscleGroup, it.updateReminderDays, it.lastUpdateDate) }
     val routinesList = routinesEntity.map { Routine(it.name, it.exerciseNames.split(","), it.imageId, it.customImageUri) }
 
     var routineStarted by rememberSaveable { mutableStateOf(false) }
@@ -83,6 +83,11 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
     val showAdhocDialog = remember { mutableStateOf(false) }
     var showStopConfirmation by remember { mutableStateOf(false) }
     val pendingNavigation = remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    var showRoutineForm by remember { mutableStateOf(false) }
+    var editingRoutine by remember { mutableStateOf<Routine?>(null) }
+    var showExerciseForm by remember { mutableStateOf(false) }
+    var editingExercise by remember { mutableStateOf<Exercise?>(null) }
     
     var showNextExerciseSelector by remember { mutableStateOf(false) }
     val completedExercisesIndices = remember { mutableStateListOf<Int>() }
@@ -98,6 +103,8 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
     
     val selectedTopColor = prefs.getInt("trainingGradientTopColor", Color.Black.toArgb())
     val selectedBottomColor = prefs.getInt("trainingGradientBottomColor", Color(0xFF424242).toArgb())
+    val fontColor1 = Color(prefs.getInt("mainFontColor1", Color.White.toArgb()))
+    val fontColor2 = Color(prefs.getInt("mainFontColor2", Color(0xFFC6FF00).toArgb()))
     
     val isWaitingForUser by viewModel.isWaitingForUser.collectAsState()
 
@@ -229,18 +236,14 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                     // SECCIÓN DE MIS RUTINAS (ESTILO IMAGEN)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Mis Rutinas", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                            Text("Mis Rutinas", color = fontColor1, fontSize = 20.sp, fontWeight = FontWeight.Black)
                             Spacer(Modifier.width(8.dp))
-                            IconButton(
-                                onClick = { navController.navigate("rutinas") },
-                                modifier = Modifier.size(24.dp).background(Color(0xFFC6FF00), CircleShape)
+                            Box(
+                                modifier = Modifier.size(24.dp).background(fontColor2, CircleShape).clickable { editingRoutine = null; showRoutineForm = true },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(Icons.Default.Add, null, tint = Color.Black, modifier = Modifier.size(16.dp))
                             }
-                        }
-                        TextButton(onClick = { navController.navigate("rutinas") }) {
-                            Text("Ver todas", color = Color(0xFFC6FF00), fontSize = 12.sp)
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color(0xFFC6FF00), modifier = Modifier.size(16.dp))
                         }
                     }
                     Spacer(Modifier.height(12.dp))
@@ -251,13 +254,13 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                             modifier = Modifier.width(160.dp).height(200.dp).clickable { showAdhocDialog.value = true },
                             shape = RoundedCornerShape(20.dp),
                             colors = CardDefaults.cardColors(containerColor = Color.Black),
-                            border = BorderStroke(1.dp, Color(0xFFC6FF00).copy(0.5f))
+                            border = BorderStroke(1.dp, fontColor2.copy(0.5f))
                         ) {
                             Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                                Icon(Icons.Default.FlashOn, null, tint = Color(0xFFC6FF00), modifier = Modifier.size(40.dp))
+                                Icon(Icons.Default.FlashOn, null, tint = fontColor2, modifier = Modifier.size(40.dp))
                                 Column {
-                                    Text("Rutina", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                    Text("Rápida", color = Color(0xFFC6FF00), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    Text("Rutina", color = fontColor1, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                    Text("Rápida", color = fontColor2, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                                     Spacer(Modifier.height(4.dp))
                                     Text("Elegi lo que tenes ganas de hacer hoy.", color = Color.Gray, fontSize = 10.sp, lineHeight = 12.sp)
                                 }
@@ -317,30 +320,33 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
 
                                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.8f)))))
                                         
-                                        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                                                IconButton(
-                                                    onClick = { navController.navigate("rutinas?edit=${routine.name}") },
-                                                    modifier = Modifier.size(28.dp).background(Color.Black.copy(0.4f), CircleShape)
+                                        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                Box(
+                                                    modifier = Modifier.size(28.dp).background(Color.Black.copy(0.6f), CircleShape).clickable { editingRoutine = routine; showRoutineForm = true },
+                                                    contentAlignment = Alignment.Center
                                                 ) {
-                                                    Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                    Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.size(14.dp))
                                                 }
-                                                IconButton(
-                                                    onClick = {
+                                                Box(
+                                                    modifier = Modifier.size(28.dp).background(fontColor2, CircleShape).clickable {
                                                         if (routineExercises.isNotEmpty()) {
                                                             selectedExercises = routineExercises; currentIndex = 0; currentSet = 1; phase = 0; timeLeft = globalWait; routineStarted = true; waitingToStart = true; routineFinished = false
                                                             currentRoutineName = routine.name
                                                             completedExercisesIndices.clear()
                                                         }
                                                     },
-                                                    modifier = Modifier.size(28.dp).background(Color.White.copy(0.2f), CircleShape)
+                                                    contentAlignment = Alignment.Center
                                                 ) {
-                                                    Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                    Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(16.dp))
                                                 }
                                             }
+                                        }
+
+                                        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Bottom) {
                                             Column {
-                                                Text(routine.name, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                                Text(muscles, color = Color(0xFFC6FF00), fontSize = 10.sp)
+                                                Text(routine.name, color = fontColor1, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                                Text(muscles, color = fontColor2, fontSize = 10.sp)
                                                 Spacer(Modifier.height(8.dp))
                                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                                     Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(12.dp))
@@ -355,7 +361,7 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                                 AnimatedVisibility(visible = isExpanded) {
                                     Column(Modifier.fillMaxWidth().padding(top = 8.dp).background(Color.Black.copy(0.3f), RoundedCornerShape(12.dp)).padding(8.dp)) {
                                         routineExercises.forEach { ex ->
-                                            Text("• ${ex.name}", color = Color.White, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text("• ${ex.name}", color = fontColor1, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                         }
                                     }
                                 }
@@ -367,11 +373,11 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
 
                     // SECCIÓN DE MIS EJERCICIOS (MODO GRID 2 COLUMNAS)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Mis Ejercicios", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                        Text("Mis Ejercicios", color = fontColor1, fontSize = 20.sp, fontWeight = FontWeight.Black)
                         Spacer(Modifier.width(8.dp))
-                        IconButton(
-                            onClick = { navController.navigate("ejercicios") },
-                            modifier = Modifier.size(24.dp).background(Color(0xFFC6FF00), CircleShape)
+                        Box(
+                            modifier = Modifier.size(24.dp).background(fontColor2, CircleShape).clickable { editingExercise = null; showExerciseForm = true },
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Default.Add, null, tint = Color.Black, modifier = Modifier.size(16.dp))
                         }
@@ -391,7 +397,7 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                         ) {
                             Text(
                                 text = muscle.uppercase(),
-                                color = Color(0xFFC6FF00),
+                                color = fontColor2,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Black,
                                 letterSpacing = 1.sp
@@ -399,7 +405,7 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                             Icon(
                                 if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                                 null,
-                                tint = Color(0xFFC6FF00),
+                                tint = fontColor2,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -421,35 +427,37 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                                                 colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
                                                 border = BorderStroke(0.5.dp, Color.White.copy(0.1f))
                                             ) {
-                                                Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                                        Text(exercise.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                            IconButton(
-                                                                onClick = { navController.navigate("ejercicios") },
-                                                                modifier = Modifier.size(24.dp).background(Color.Black.copy(0.4f), CircleShape)
-                                                            ) {
-                                                                Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                                            }
-                                                            IconButton(
-                                                                onClick = {
-                                                                    selectedExercises = listOf(exercise); currentIndex = 0; currentSet = 1; phase = 0; timeLeft = globalWait; routineStarted = true; waitingToStart = true; routineFinished = false
-                                                                    currentRoutineName = exercise.name
-                                                                    completedExercisesIndices.clear()
-                                                                },
-                                                                modifier = Modifier.size(24.dp).background(Color.White.copy(0.2f), CircleShape)
-                                                            ) {
-                                                                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                                            }
+                                                Box(Modifier.fillMaxSize()) {
+                                                    Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.End) {
+                                                        Box(
+                                                            modifier = Modifier.size(24.dp).background(Color.Black.copy(0.6f), CircleShape).clickable { editingExercise = exercise; showExerciseForm = true },
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.size(12.dp))
+                                                        }
+                                                        Spacer(Modifier.width(4.dp))
+                                                        Box(
+                                                            modifier = Modifier.size(24.dp).background(fontColor2, CircleShape).clickable {
+                                                                selectedExercises = listOf(exercise); currentIndex = 0; currentSet = 1; phase = 0; timeLeft = globalWait; routineStarted = true; waitingToStart = true; routineFinished = false
+                                                                currentRoutineName = exercise.name
+                                                                completedExercisesIndices.clear()
+                                                            },
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(14.dp))
                                                         }
                                                     }
-                                                    
-                                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                                        Text("${exercise.sets}x${exercise.reps} — ${exercise.weight}kg", color = Color(0xFFC6FF00), fontSize = 10.sp, fontWeight = FontWeight.Black)
-                                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                                            Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(10.dp))
-                                                            Spacer(Modifier.width(2.dp))
-                                                            Text("${estMinutes}m", color = Color.Gray, fontSize = 9.sp)
+
+                                                    Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                                                        Text(exercise.name, color = fontColor1, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.6f))
+                                                        
+                                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                                            Text("${exercise.sets}x${exercise.reps} — ${exercise.weight}kg", color = fontColor2, fontSize = 10.sp, fontWeight = FontWeight.Black)
+                                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                                Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(10.dp))
+                                                                Spacer(Modifier.width(2.dp))
+                                                                Text("${estMinutes}m", color = Color.Gray, fontSize = 10.sp)
+                                                            }
                                                         }
                                                     }
                                                 }
@@ -466,10 +474,10 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                 }
             } else if (routineFinished) {
                 Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF00FF00), modifier = Modifier.size(100.dp))
+                    Icon(Icons.Default.CheckCircle, null, tint = fontColor2, modifier = Modifier.size(100.dp))
                     Spacer(Modifier.height(24.dp))
-                    Text("¡TRABAJO COMPLETADO!", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
-                    Text(currentRoutineName, color = Color(0xFF00FF00), fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    Text("¡TRABAJO COMPLETADO!", color = fontColor1, fontSize = 28.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
+                    Text(currentRoutineName, color = fontColor2, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(16.dp))
                     Text("Has finalizado todos los ejercicios. ¡Sigue así!", color = Color.Gray, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(48.dp))
@@ -479,7 +487,7 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                             routineFinished = false
                             completedExercisesIndices.clear()
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FF00)),
+                        colors = ButtonDefaults.buttonColors(containerColor = fontColor2),
                         modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
@@ -489,30 +497,30 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
             } else if (waitingToStart) {
                 Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("¿PREPARADO?", color = Color.Gray, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                    Text(currentRoutineName, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
+                    Text(currentRoutineName, color = fontColor1, fontSize = 32.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center)
                     Spacer(Modifier.height(32.dp))
                     
                     // Resalte visual para el ejercicio seleccionado
                     val currentEx = selectedExercises[currentIndex]
                     Card(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFF00FF00).copy(0.1f)),
-                        border = BorderStroke(2.dp, Color(0xFF00FF00))
+                        colors = CardDefaults.cardColors(containerColor = fontColor2.copy(0.1f)),
+                        border = BorderStroke(2.dp, fontColor2)
                     ) {
                         Column(Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             // CORRECCIÓN: Etiqueta dinámica
                             Text(
                                 text = if (completedExercisesIndices.isEmpty()) "PRIMER EJERCICIO:" else "PRÓXIMO EJERCICIO:",
-                                color = Color(0xFF00FF00), 
+                                color = fontColor2, 
                                 fontSize = 12.sp, 
                                 fontWeight = FontWeight.Black
                             )
-                            Text(currentEx.name, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                            Text("${currentEx.sets} series x ${currentEx.reps} reps — ${currentEx.weight}kg", color = Color(0xFF00FF00), fontSize = 14.sp)
+                            Text(currentEx.name, color = fontColor1, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text("${currentEx.sets} series x ${currentEx.reps} reps — ${currentEx.weight}kg", color = fontColor2, fontSize = 14.sp)
                         }
                     }
 
-                    Button(onClick = { waitingToStart = false }, modifier = Modifier.size(130.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00FF00))) {
+                    Button(onClick = { waitingToStart = false }, modifier = Modifier.size(130.dp), shape = CircleShape, colors = ButtonDefaults.buttonColors(containerColor = fontColor2)) {
                         Text("DALE", color = Color.Black, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                     }
                     
@@ -528,28 +536,28 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                                 }, 
                                 colors = CardDefaults.cardColors(
                                     containerColor = when {
-                                        isSelected -> Color(0xFF00FF00).copy(0.15f)
+                                        isSelected -> fontColor2.copy(0.15f)
                                         isCompleted -> Color.Gray.copy(0.1f)
                                         else -> Color.White.copy(0.05f)
                                     }
                                 ),
-                                border = if (isSelected) BorderStroke(1.dp, Color(0xFF00FF00)) else null
+                                border = if (isSelected) BorderStroke(1.dp, fontColor2) else null
                             ) {
                                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                     Column(Modifier.weight(1f)) {
                                         Text(
                                             ex.name, 
                                             color = when {
-                                                isSelected -> Color(0xFF00FF00)
+                                                isSelected -> fontColor2
                                                 isCompleted -> Color.Gray
-                                                else -> Color.White
+                                                else -> fontColor1
                                             }, 
                                             fontWeight = FontWeight.Bold,
                                             textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None
                                         )
-                                        Text("${ex.sets} series x ${ex.reps} reps — ${ex.weight}kg", color = if (isSelected) Color(0xFF00FF00).copy(0.7f) else Color.Gray, fontSize = 12.sp)
+                                        Text("${ex.sets} series x ${ex.reps} reps — ${ex.weight}kg", color = if (isSelected) fontColor2.copy(0.7f) else Color.Gray, fontSize = 12.sp)
                                     }
-                                    if (isSelected) Icon(Icons.Default.Check, null, tint = Color(0xFF00FF00))
+                                    if (isSelected) Icon(Icons.Default.Check, null, tint = fontColor2)
                                     if (isCompleted) Icon(Icons.Default.CheckCircle, null, tint = Color.Gray.copy(0.5f))
                                 }
                             }
@@ -698,6 +706,66 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
             }
         }
     }
+
+    if (showRoutineForm) {
+        Dialog(onDismissRequest = { showRoutineForm = false }) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f),
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF1A1C20)
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    RoutineForm(
+                        allExercises = allExercises,
+                        initialRoutine = editingRoutine,
+                        onCancel = { showRoutineForm = false },
+                        onDelete = {
+                            editingRoutine?.let { viewModel.deleteRoutine(it.name) }
+                            showRoutineForm = false
+                        },
+                        onSave = { routine ->
+                            if (editingRoutine != null && editingRoutine!!.name != routine.name) {
+                                viewModel.deleteRoutine(editingRoutine!!.name)
+                            }
+                            viewModel.addRoutine(com.example.Gym_App.model.RoutineEntity(routine.name, routine.exerciseNames.joinToString(","), routine.imageId, routine.customImageUri))
+                            showRoutineForm = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    if (showExerciseForm) {
+        Dialog(onDismissRequest = { showExerciseForm = false }) {
+            Surface(
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f),
+                shape = RoundedCornerShape(24.dp),
+                color = Color(0xFF1A1C20)
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    val muscleGroups = listOf("Pecho", "Espalda", "Piernas", "Hombros", "Brazos", "Core")
+                    ExerciseForm(
+                        isEditMode = editingExercise != null,
+                        initial = editingExercise,
+                        existingMuscles = muscleGroups,
+                        onCancel = { showExerciseForm = false },
+                        onDelete = {
+                            editingExercise?.let { viewModel.deleteExercise(it.name) }
+                            showExerciseForm = false
+                        },
+                        onSave = { ex ->
+                            viewModel.addExercise(com.example.Gym_App.model.ExerciseEntity(
+                                ex.name, ex.reps, ex.sets, ex.weight, ex.rest, ex.duration, ex.muscleGroup,
+                                lastUpdateDate = System.currentTimeMillis()
+                            ))
+                            showExerciseForm = false
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -780,8 +848,10 @@ fun TrainingUI(
     onStop: () -> Unit,
     onUpdateExercise: (String, Int, Int, Int) -> Unit
 ) {
-    val neonGreen = Color(0xFFC6FF00)
     val context = LocalContext.current
+    val prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
+    val fontColor1 = Color(prefs.getInt("mainFontColor1", Color.White.toArgb()))
+    val fontColor2 = Color(prefs.getInt("mainFontColor2", Color(0xFFC6FF00).toArgb()))
 
     var showEditDialog by remember { mutableStateOf(false) }
     var editedSets by remember { mutableStateOf(exercise.sets.toString()) }
@@ -796,12 +866,12 @@ fun TrainingUI(
         Surface(
             color = Color.Black.copy(0.3f),
             shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(0.5.dp, neonGreen.copy(0.5f))
+            border = BorderStroke(0.5.dp, fontColor2.copy(0.5f))
         ) {
             Text(
                 "EJERCICIO ${completedIndices.size + 1} DE $totalExercises",
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-                color = neonGreen,
+                color = fontColor2,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -809,7 +879,7 @@ fun TrainingUI(
 
         Spacer(Modifier.height(16.dp))
         
-        Text(exercise.name.uppercase(), color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, modifier = Modifier.clickable {
+        Text(exercise.name.uppercase(), color = fontColor1, fontSize = 32.sp, fontWeight = FontWeight.Black, textAlign = TextAlign.Center, modifier = Modifier.clickable {
             showEditDialog = true
             editedSets = exercise.sets.toString()
             editedReps = exercise.reps.toString()
@@ -822,18 +892,18 @@ fun TrainingUI(
             editedReps = exercise.reps.toString()
             editedWeight = exercise.weight.toString()
         }) {
-            Text("${exercise.sets}", color = neonGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("${exercise.sets}", color = fontColor2, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(" SERIES X ", color = Color.Gray, fontSize = 14.sp)
-            Text("${exercise.reps}", color = neonGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("${exercise.reps}", color = fontColor2, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(" REPS — ", color = Color.Gray, fontSize = 14.sp)
-            Text("${exercise.weight}KG", color = neonGreen, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("${exercise.weight}KG", color = fontColor2, fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(32.dp))
 
         // Timer Circular Estilo Imagen
         Box(contentAlignment = Alignment.Center, modifier = Modifier.size(200.dp)) {
-            val phaseColor = when (phase) { 0 -> Color.Yellow; 1 -> neonGreen; else -> Color(0xFF00BFFF) }
+            val phaseColor = when (phase) { 0 -> Color.Yellow; 1 -> fontColor2; else -> Color(0xFF00BFFF) }
             val totalPhaseTime = if (phase == 1) exercise.duration.toFloat() else if (phase == 2) exercise.rest.toFloat() else globalWait.toFloat()
             val progress = if (totalPhaseTime > 0) timeLeft / totalPhaseTime else 0f
             
@@ -889,7 +959,7 @@ fun TrainingUI(
                     Text(when(phase){0->"PREPÁRATE"; 1->"¡DALE!"; else->"DESCANSO"}, color = phaseColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
                 AnimatedVisibility(visible = true, enter = scaleIn(animationSpec = tween(300)), exit = scaleOut()) {
-                    Text("$timeLeft", color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Black)
+                    Text("$timeLeft", color = fontColor1, fontSize = 64.sp, fontWeight = FontWeight.Black)
                 }
                 Text("SEGUNDOS", color = Color.Gray, fontSize = 12.sp)
             }
@@ -898,7 +968,7 @@ fun TrainingUI(
         Spacer(Modifier.height(24.dp))
         
         Surface(color = Color.Black.copy(0.3f), shape = RoundedCornerShape(16.dp)) {
-            Text("SERIE $currentSet DE ${exercise.sets}", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = neonGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text("SERIE $currentSet DE ${exercise.sets}", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = fontColor2, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
 
         Spacer(Modifier.height(32.dp))
@@ -914,28 +984,28 @@ fun TrainingUI(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color.White.copy(if (isCurrent) 0.1f else 0.05f),
                     shape = RoundedCornerShape(12.dp),
-                    border = if (isCurrent) BorderStroke(1.dp, neonGreen.copy(0.4f)) else BorderStroke(0.5.dp, Color.White.copy(0.1f))
+                    border = if (isCurrent) BorderStroke(1.dp, fontColor2.copy(0.4f)) else BorderStroke(0.5.dp, Color.White.copy(0.1f))
                 ) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         // Círculo de estado
-                        Box(Modifier.size(28.dp).background(if (isCompleted) neonGreen else Color.White.copy(0.1f), CircleShape), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(28.dp).background(if (isCompleted) fontColor2 else Color.White.copy(0.1f), CircleShape), contentAlignment = Alignment.Center) {
                             if (isCompleted) {
                                 Icon(Icons.Default.Check, null, tint = Color.Black, modifier = Modifier.size(18.dp))
                             } else {
-                                Text("${index + 1}", color = Color.White, fontSize = 12.sp)
+                                Text("${index + 1}", color = fontColor1, fontSize = 12.sp)
                             }
                         }
                         
                         Spacer(Modifier.width(16.dp))
                         
                         Column(Modifier.weight(1f)) {
-                            Text(ex.name, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                            Text(ex.name, color = fontColor1, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             Text("${ex.sets}×${ex.reps} — ${ex.weight}kg", color = Color.Gray, fontSize = 12.sp)
                         }
                         
                         if (isCurrent) {
-                            Surface(color = neonGreen.copy(0.1f), shape = RoundedCornerShape(4.dp)) {
-                                Text("ACTUAL", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = neonGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Surface(color = fontColor2.copy(0.1f), shape = RoundedCornerShape(4.dp)) {
+                                Text("ACTUAL", modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = fontColor2, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -949,7 +1019,7 @@ fun TrainingUI(
         Row(Modifier.fillMaxWidth(), Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(
                 onClick = onTogglePause,
-                colors = ButtonDefaults.buttonColors(containerColor = neonGreen),
+                colors = ButtonDefaults.buttonColors(containerColor = fontColor2),
                 modifier = Modifier.weight(1f).height(60.dp),
                 shape = RoundedCornerShape(16.dp)
             ) {
