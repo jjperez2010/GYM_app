@@ -1,7 +1,9 @@
 package com.example.Gym_App.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -14,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.example.Gym_App.model.Exercise
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,64 +42,125 @@ fun ExerciseForm(
     var rest by remember { mutableIntStateOf(initial?.rest ?: 120) }
     var duration by remember { mutableIntStateOf(initial?.duration ?: 60) }
     var updateReminderDays by remember { mutableIntStateOf(initial?.updateReminderDays ?: 30) }
-    
-    Column(Modifier.verticalScroll(rememberScrollState())) {
-        OutlinedTextField(
-            value = name,
-            onValueChange = { name = it },
-            label = { Text("Nombre") },
-            modifier = Modifier.fillMaxWidth(),
-            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("¿Eliminar Ejercicio?", color = Color.White) },
+            text = { Text("Esta acción no se puede deshacer.", color = Color.Gray) },
+            containerColor = Color(0xFF1A1C20),
+            confirmButton = {
+                TextButton(onClick = { 
+                    showDeleteConfirmation = false
+                    onDelete() 
+                }) { Text("ELIMINAR", color = Color.Red, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) { Text("CANCELAR", color = Color.Gray) }
+            }
         )
-        
-        Spacer(Modifier.height(8.dp))
-        
-        if (!isAddingNewMuscle) {
-            ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+    }
+
+    Dialog(
+        onDismissRequest = onCancel,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = Color.Black.copy(alpha = 0.95f)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = if (isEditMode) "Editar Ejercicio" else "Nuevo Ejercicio",
+                    color = Color.White,
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.Black,
+                    modifier = Modifier.padding(bottom = 24.dp)
+                )
+
                 OutlinedTextField(
-                    value = muscle,
-                    onValueChange = {},
-                    readOnly = true,
-                    label = { Text("Grupo Muscular") },
-                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Nombre") },
+                    modifier = Modifier.fillMaxWidth(),
                     colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
                 )
-                ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    existingMuscles.forEach { selection ->
-                        DropdownMenuItem(text = { Text(selection) }, onClick = { muscle = selection; expanded = false })
+                
+                Spacer(Modifier.height(16.dp))
+                
+                if (!isAddingNewMuscle) {
+                    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
+                        OutlinedTextField(
+                            value = muscle,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Grupo Muscular") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                        )
+                        ExposedDropdownMenu(
+                            expanded = expanded, 
+                            onDismissRequest = { expanded = false },
+                            modifier = Modifier.background(Color(0xFF1A1C20))
+                        ) {
+                            existingMuscles.forEach { selection ->
+                                DropdownMenuItem(
+                                    text = { Text(selection, color = Color.White) }, 
+                                    onClick = { muscle = selection; expanded = false }
+                                )
+                            }
+                            DropdownMenuItem(
+                                text = { Text("+ Agregar nuevo...", color = Color(0xFF00FF00)) }, 
+                                onClick = { isAddingNewMuscle = true; expanded = false }
+                            )
+                        }
                     }
-                    DropdownMenuItem(text = { Text("+ Agregar nuevo...", color = Color(0xFF00FF00)) }, onClick = { isAddingNewMuscle = true; expanded = false })
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = newMuscleName,
+                            onValueChange = { newMuscleName = it },
+                            label = { Text("Nuevo Grupo") },
+                            modifier = Modifier.weight(1f),
+                            colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
+                        )
+                        IconButton(onClick = { isAddingNewMuscle = false }) { Icon(Icons.Default.Close, null, tint = Color.Red) }
+                        IconButton(onClick = { if (newMuscleName.isNotBlank()) { muscle = newMuscleName; isAddingNewMuscle = false } }) { Icon(Icons.Default.Check, null, tint = Color.Green) }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                NumericStepper("Series", sets, 1) { sets = it }
+                NumericStepper("Repeticiones", reps, 1) { reps = it }
+                NumericStepper("Peso (kg)", weight, 1, 5) { weight = it }
+                NumericStepper("Descanso (seg)", rest, 10) { rest = it }
+                NumericStepper("Ejecución (seg)", duration, 5) { duration = it }
+                
+                Spacer(Modifier.height(24.dp))
+                Text("Progreso y Avisos", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                Text("Días sin cambios de peso para alertar:", color = Color.Gray, fontSize = 12.sp)
+                NumericStepper("Días (0=Desactivado)", updateReminderDays, 1, 7) { updateReminderDays = it }
+
+                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.height(32.dp))
+
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (isEditMode) { 
+                        MenuButton("Eliminar", Modifier.weight(1f), bColor = Color.Red) { showDeleteConfirmation = true }
+                    }
+                    MenuButton("Cancelar", Modifier.weight(1f), bColor = Color.Gray) { onCancel() }
+                    MenuButton("Guardar", Modifier.weight(1f), bColor = Color(0xFF00FF00)) { 
+                        if (name.isNotBlank()) onSave(Exercise(name, reps, sets, weight, rest, duration, muscle, updateReminderDays, initial?.lastUpdateDate ?: 0L)) 
+                    }
                 }
             }
-        } else {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = newMuscleName,
-                    onValueChange = { newMuscleName = it },
-                    label = { Text("Nuevo Grupo") },
-                    modifier = Modifier.weight(1f),
-                    colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
-                )
-                IconButton(onClick = { isAddingNewMuscle = false }) { Icon(Icons.Default.Close, null, tint = Color.Red) }
-                IconButton(onClick = { if (newMuscleName.isNotBlank()) { muscle = newMuscleName; isAddingNewMuscle = false } }) { Icon(Icons.Default.Check, null, tint = Color.Green) }
-            }
-        }
-
-        NumericStepper("Series", sets, 1) { sets = it }
-        NumericStepper("Reps", reps, 1) { reps = it }
-        NumericStepper("Peso (0=Corp, -1=Asist)", weight, 1, 5) { weight = it }
-        NumericStepper("Descanso", rest, 10) { rest = it }
-        NumericStepper("Tiempo Ejecución (s)", duration, 5) { duration = it }
-        
-        Spacer(Modifier.height(16.dp))
-        Text("Recordatorio para subir carga", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        Text("Avisar después de X días sin cambios en el ejercicio", color = Color.Gray, fontSize = 12.sp)
-        NumericStepper("Días (0=Desactivado)", updateReminderDays, 1, 7) { updateReminderDays = it }
-
-        Row(Modifier.padding(top = 16.dp)) {
-            if (isEditMode) { MenuButton("Eliminar", Modifier.weight(1f), bColor = Color.Red) { onDelete() }; Spacer(Modifier.width(8.dp)) }
-            MenuButton("Cancelar", Modifier.weight(1f), bColor = Color.Gray) { onCancel() }; Spacer(Modifier.width(8.dp)); MenuButton("Guardar", Modifier.weight(1f)) { if (name.isNotBlank()) onSave(Exercise(name, reps, sets, weight, rest, duration, muscle, updateReminderDays, initial?.lastUpdateDate ?: 0L)) }
         }
     }
 }

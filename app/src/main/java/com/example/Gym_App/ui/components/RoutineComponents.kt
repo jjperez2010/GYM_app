@@ -39,9 +39,24 @@ fun RoutineForm(
     var name by remember { mutableStateOf(initialRoutine?.name ?: "") }
     var selectedImageId by remember { mutableStateOf(initialRoutine?.imageId ?: "default") }
     var customImageUri by remember { mutableStateOf(initialRoutine?.customImageUri) }
+    val assignedDays = remember { mutableStateListOf<Int>().apply { if (initialRoutine != null) addAll(initialRoutine.assignedDays) } }
     val selected = remember { mutableStateListOf<String>().apply { if (initialRoutine != null) addAll(initialRoutine.exerciseNames) } }
     
     val savedImages = remember { mutableStateListOf<File>().apply { addAll(ImageStorage.getAllImages(context)) } }
+    var showDeleteConfirmation by remember { mutableStateOf(false) }
+
+    // Sincronizar estados cuando initialRoutine cambia (Carga de datos)
+    LaunchedEffect(initialRoutine) {
+        if (initialRoutine != null) {
+            name = initialRoutine.name
+            selectedImageId = initialRoutine.imageId
+            customImageUri = initialRoutine.customImageUri
+            assignedDays.clear()
+            assignedDays.addAll(initialRoutine.assignedDays)
+            selected.clear()
+            selected.addAll(initialRoutine.exerciseNames)
+        }
+    }
 
     val imageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let { 
@@ -52,6 +67,24 @@ fun RoutineForm(
                 savedImages.addAll(ImageStorage.getAllImages(context))
             }
         }
+    }
+
+    if (showDeleteConfirmation) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmation = false },
+            title = { Text("¿Eliminar Rutina?", color = Color.White) },
+            text = { Text("Esta acción no se puede deshacer.", color = Color.Gray) },
+            containerColor = Color(0xFF1A1C20),
+            confirmButton = {
+                TextButton(onClick = { 
+                    showDeleteConfirmation = false
+                    onDelete() 
+                }) { Text("ELIMINAR", color = Color.Red, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmation = false }) { Text("CANCELAR", color = Color.Gray) }
+            }
+        )
     }
     
     // Auto-detección de imagen por predominancia
@@ -83,15 +116,15 @@ fun RoutineForm(
     )
 
     Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(vertical = 8.dp)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             if (initialRoutine != null) {
-                MenuButton("Eliminar", Modifier.weight(1f), bColor = Color.Red) { onDelete() }
-                Spacer(Modifier.width(8.dp))
+                MenuButton("Eliminar", Modifier.weight(1f), bColor = Color.Red) { showDeleteConfirmation = true }
             }
             MenuButton("Cancelar", Modifier.weight(1f), bColor = Color.Gray) { onCancel() }
-            Spacer(Modifier.width(8.dp))
             MenuButton("Guardar", Modifier.weight(1f), bColor = Color(0xFFBB86FC)) {
-                if (name.isNotBlank() && selected.isNotEmpty()) onSave(Routine(name, selected.toList(), selectedImageId, customImageUri))
+                if (name.isNotBlank() && selected.isNotEmpty()) {
+                    onSave(Routine(name, selected.toList(), selectedImageId, customImageUri, assignedDays.toList()))
+                }
             }
         }
         
@@ -104,6 +137,30 @@ fun RoutineForm(
                 colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Color.White, unfocusedTextColor = Color.White)
             )
             Spacer(Modifier.height(16.dp))
+
+            Text("Asignar días de la semana", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            val days = listOf("Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo")
+            androidx.compose.foundation.lazy.LazyRow(
+                Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(days.size) { index ->
+                    val dayNum = index + 1
+                    val isSelected = assignedDays.contains(dayNum)
+                    FilterChip(
+                        selected = isSelected,
+                        onClick = { if (isSelected) assignedDays.remove(dayNum) else assignedDays.add(dayNum) },
+                        label = { Text(days[index]) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            labelColor = Color.White,
+                            selectedLabelColor = Color.Black,
+                            selectedContainerColor = Color(0xFFC6FF00)
+                        )
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
 
             Text("Imagen de la Rutina", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
             

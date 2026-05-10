@@ -16,5 +16,6 @@ data class Routine(
     val name: String,
     val exerciseNames: List<String>,
     val imageId: String = "default",
-    val customImageUri: String? = null
+    val customImageUri: String? = null,
+    val assignedDays: List<Int> = emptyList()
 )

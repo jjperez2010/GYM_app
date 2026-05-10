@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 7,
-    "identityHash": "7d600ac995778d706c8c7b0b6e81ff73",
+    "identityHash": "bee64e969b2e76e6e4d0e4cc2fa661a5",
     "entities": [
       {
         "tableName": "exercises",
@@ -78,7 +78,7 @@
       },
       {
         "tableName": "routines",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`name` TEXT NOT NULL, `exerciseNames` TEXT NOT NULL, `imageId` TEXT NOT NULL, `customImageUri` TEXT, PRIMARY KEY(`name`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`name` TEXT NOT NULL, `exerciseNames` TEXT NOT NULL, `imageId` TEXT NOT NULL, `customImageUri` TEXT, `assignedDay` INTEGER, PRIMARY KEY(`name`))",
         "fields": [
           {
             "fieldPath": "name",
@@ -102,6 +102,11 @@
             "fieldPath": "customImageUri",
             "columnName": "customImageUri",
             "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "assignedDay",
+            "columnName": "assignedDay",
+            "affinity": "INTEGER"
           }
         ],
         "primaryKey": {
@@ -198,7 +203,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7d600ac995778d706c8c7b0b6e81ff73')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bee64e969b2e76e6e4d0e4cc2fa661a5')"
     ]
   }
 }

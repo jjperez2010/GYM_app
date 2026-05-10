@@ -34,16 +34,58 @@ import java.time.format.TextStyle
 import java.util.*
 
 @Composable
-fun ConsistencyCalendar(workoutDates: List<LocalDate>, workoutHistory: List<WorkoutHistoryEntity> = emptyList(), modifier: Modifier = Modifier) {
-    var viewMonth by remember { mutableStateOf(YearMonth.now()) }
-    val daysInMonth = viewMonth.lengthOfMonth()
-    val firstDayOfMonth = viewMonth.atDay(1).dayOfWeek.value % 7 // 0 for Sunday
+fun WeeklyHeatmap(workoutDates: List<LocalDate>, modifier: Modifier = Modifier) {
+    val today = LocalDate.now()
+    // Últimos 14 días
+    val days = (13 downTo 0).map { today.minusDays(it.toLong()) }
     
-    val totalSlots = daysInMonth + firstDayOfMonth
-    
-    var selectedDateForHistory by remember { mutableStateOf<LocalDate?>(null) }
-    
-    // Calculando racha actual
+    Column(modifier = modifier.fillMaxWidth()) {
+        Text(
+            "Actividad de las últimas 2 semanas:",
+            color = Color.Gray.copy(0.7f),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            days.forEach { date ->
+                val hasWorkout = workoutDates.contains(date)
+                val isToday = date == today
+                
+                Box(
+                    modifier = Modifier
+                        .size(14.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(
+                            if (hasWorkout) Color(0xFFC6FF00) 
+                            else Color.White.copy(0.1f)
+                        )
+                        .then(
+                            if (isToday && !hasWorkout) Modifier.border(1.dp, Color(0xFFC6FF00).copy(0.5f), RoundedCornerShape(3.dp))
+                            else Modifier
+                        )
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun HomeHeader(workoutDates: List<LocalDate>, modifier: Modifier = Modifier) {
+    val prefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("AppPrefs", android.content.Context.MODE_PRIVATE)
+    val userName = prefs.getString("userName", "") ?: ""
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    val greeting = when (hour) {
+        in 5..12 -> "Buenos días"
+        in 13..19 -> "Buenas tardes"
+        else -> "Buenas noches"
+    }
+
+    // Calcular racha
     val streak = remember(workoutDates) {
         var count = 0
         var checkDate = LocalDate.now()
@@ -62,54 +104,78 @@ fun ConsistencyCalendar(workoutDates: List<LocalDate>, workoutHistory: List<Work
         count
     }
 
-    val prefs = androidx.compose.ui.platform.LocalContext.current.getSharedPreferences("AppPrefs", android.content.Context.MODE_PRIVATE)
-    val userName = prefs.getString("userName", "") ?: ""
-    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-    val greeting = when (hour) {
-        in 5..12 -> "¡Buenos días!"
-        in 13..19 -> "¡Buenas tardes!"
-        else -> "¡Buenas noches!"
-    }
+    // Calcular progreso semanal (entrenamientos en los últimos 7 días)
+    val startOfWeek = LocalDate.now().minusDays(LocalDate.now().dayOfWeek.value.toLong() - 1)
+    val weeklyCount = workoutDates.count { !it.isBefore(startOfWeek) }
+    val weeklyGoal = 5 // Objetivo por defecto
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        // Encabezado con Saludo y Racha
+    Column(modifier = modifier.fillMaxWidth().padding(bottom = 16.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
-            Column {
+            Column(Modifier.weight(1f)) {
                 Text(
-                    text = if (userName.isNotBlank()) "$greeting $userName! 💪" else "$greeting 💪",
+                    text = if (userName.isNotBlank()) "¡$greeting, $userName!" else "¡$greeting!",
                     color = Color.White,
-                    fontSize = 22.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Black
                 )
-                Text(
-                    text = "Listo para entrenar hoy",
-                    color = Color.Gray,
-                    fontSize = 12.sp
-                )
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "$weeklyCount de $weeklyGoal entrenamientos esta semana",
+                        color = Color.Gray,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            
+            Surface(
+                color = Color.White.copy(0.05f),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, Color.White.copy(0.1f))
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(
                         Icons.Default.LocalFireDepartment, 
                         null, 
                         tint = Color(0xFFC6FF00), 
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(20.dp)
                     )
+                    Spacer(Modifier.width(4.dp))
                     Text(
                         text = "$streak",
                         color = Color.White,
-                        fontSize = 20.sp,
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Black
                     )
                 }
-                Text("racha", color = Color.Gray, fontSize = 10.sp)
             }
         }
+        
+        Spacer(Modifier.height(16.dp))
+        
+        WeeklyHeatmap(workoutDates = workoutDates)
+    }
+}
 
+@Composable
+fun ConsistencyCalendar(workoutDates: List<LocalDate>, workoutHistory: List<WorkoutHistoryEntity> = emptyList(), modifier: Modifier = Modifier) {
+    var viewMonth by remember { mutableStateOf(YearMonth.now()) }
+    val daysInMonth = viewMonth.lengthOfMonth()
+    val firstDayOfMonth = viewMonth.atDay(1).dayOfWeek.value % 7 // 0 for Sunday
+    
+    val totalSlots = daysInMonth + firstDayOfMonth
+    
+    var selectedDateForHistory by remember { mutableStateOf<LocalDate?>(null) }
+    
+    Column(modifier = modifier.fillMaxWidth()) {
         Card(
             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C20).copy(0.8f)),

@@ -1,6 +1,7 @@
 package com.example.Gym_App.ui.screens
 
 
+import androidx.compose.foundation.Image
 import android.app.Activity
 import android.content.Context
 import android.view.WindowManager
@@ -10,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
@@ -39,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.navigation.NavController
 import com.example.Gym_App.model.Exercise
+import com.example.Gym_App.model.ExerciseEntity
 import com.example.Gym_App.model.Routine
 import com.example.Gym_App.model.WorkoutHistoryEntity
 import com.example.Gym_App.ui.components.*
@@ -59,21 +62,32 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import android.graphics.BitmapFactory
 import androidx.core.net.toUri
+import androidx.core.content.edit
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.lazy.LazyRow
+import com.example.Gym_App.utils.ImageStorage
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import java.io.File
 
 
 
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(navController: NavController, viewModel: GymViewModel) {
     val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE) }
+    
     val routinesEntity by viewModel.routines.collectAsState()
     val allExercisesEntity by viewModel.exercises.collectAsState()
     val workoutDates by viewModel.workoutDates.collectAsState()
-    val workoutHistory by viewModel.history.collectAsState()
     
     val allExercises = allExercisesEntity.map { Exercise(it.name, it.reps, it.sets, it.weight, it.rest, it.duration, it.muscleGroup, it.updateReminderDays, it.lastUpdateDate) }
-    val routinesList = routinesEntity.map { Routine(it.name, it.exerciseNames.split(","), it.imageId, it.customImageUri) }
+    val routinesList = routinesEntity.map { Routine(it.name, it.exerciseNames.split(","), it.imageId, it.customImageUri, it.assignedDays?.split(",")?.mapNotNull { d -> d.toIntOrNull() } ?: emptyList()) }
 
     var routineStarted by rememberSaveable { mutableStateOf(false) }
     var waitingToStart by rememberSaveable { mutableStateOf(false) }
@@ -84,13 +98,31 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
     var showStopConfirmation by remember { mutableStateOf(false) }
     val pendingNavigation = remember { mutableStateOf<(() -> Unit)?>(null) }
 
-    var showRoutineForm by remember { mutableStateOf(false) }
-    var editingRoutine by remember { mutableStateOf<Routine?>(null) }
-    var showExerciseForm by remember { mutableStateOf(false) }
-    var editingExercise by remember { mutableStateOf<Exercise?>(null) }
-    
     var showNextExerciseSelector by remember { mutableStateOf(false) }
     val completedExercisesIndices = remember { mutableStateListOf<Int>() }
+
+    var editingExercise by remember { mutableStateOf<Exercise?>(null) }
+    var editingMuscleForImage by remember { mutableStateOf<String?>(null) }
+    var showMuscleImagePicker by remember { mutableStateOf(false) }
+    var showExerciseForm by remember { mutableStateOf(false) }
+    val muscleGroups = listOf("Pecho", "Espalda", "Piernas", "Hombros", "Brazos", "Core")
+
+    val imageOptions = listOf(
+        "pecho" to "Pecho", "espalda" to "Espalda", "biceps" to "Bíceps",
+        "triceps" to "Tríceps", "hombros" to "Hombros", "cuadriceps" to "Piernas",
+        "abdominales" to "Abs", "core" to "Core"
+    )
+
+    val muscleImageLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            val path = ImageStorage.saveImage(context, it)
+            if (path != null) {
+                editingMuscleForImage?.let { m ->
+                    prefs.edit { putString("muscle_img_$m", path) }
+                }
+            }
+        }
+    }
 
     var currentIndex by rememberSaveable { mutableIntStateOf(0) }
     var currentSet by rememberSaveable { mutableIntStateOf(1) }
@@ -98,7 +130,6 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
     var isPaused by rememberSaveable { mutableStateOf(false) }
     var phase by rememberSaveable { mutableIntStateOf(0) } 
     
-    val prefs = context.getSharedPreferences("AppPrefs", Context.MODE_PRIVATE)
     val globalWait = prefs.getInt("globalWait", 20)
     
     val selectedTopColor = prefs.getInt("trainingGradientTopColor", Color.Black.toArgb())
@@ -224,159 +255,212 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                 ) {
                     Spacer(Modifier.height(16.dp))
 
-                    // CALENDARIO DE CONSISTENCIA
-                    ConsistencyCalendar(
-                        workoutDates = workoutDates,
-                        workoutHistory = workoutHistory,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    // HEADER CON PROGRESO Y HEATMAP (Animado)
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn() + expandVertically()
+                    ) {
+                        HomeHeader(workoutDates = workoutDates)
+                    }
 
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                    // SECCIÓN DE MIS RUTINAS (ESTILO IMAGEN)
+                    // CARD PRINCIPAL: TE TOCA HOY o CONTINUAR
+                    val workoutDoneToday = workoutDates.contains(java.time.LocalDate.now())
+                    val isContinuing = selectedExercises.isNotEmpty() && completedExercisesIndices.isNotEmpty() && completedExercisesIndices.size < selectedExercises.size
+
+                    Box(Modifier.animateContentSize()) {
+                    Box(Modifier.animateContentSize()) {
+                        if (isContinuing) {
+                            ContinueWorkoutCard(
+                                routineName = currentRoutineName,
+                                completedCount = completedExercisesIndices.size,
+                                totalCount = selectedExercises.size,
+                                onClick = { routineStarted = true; waitingToStart = true }
+                            )
+                        } else {
+                            val today = java.time.LocalDate.now().dayOfWeek.value // 1 (Monday) to 7 (Sunday)
+                            val routineForToday = routinesList.find { it.assignedDays.contains(today) } ?: routinesList.firstOrNull()
+
+                            TodayWorkoutCard(
+                                routine = routineForToday,
+                                isDone = workoutDoneToday,
+                                allExercises = allExercises,
+                                onStart = { routine ->
+                                    if (routine != null) {
+                                        val routineExercises = routine.exerciseNames.mapNotNull { name -> allExercises.find { it.name == name } }
+                                        if (routineExercises.isNotEmpty()) {
+                                            selectedExercises = routineExercises
+                                            currentIndex = 0
+                                            currentSet = 1
+                                            phase = 0
+                                            timeLeft = globalWait
+                                            routineStarted = true
+                                            waitingToStart = true
+                                            routineFinished = false
+                                            currentRoutineName = routine.name
+                                            completedExercisesIndices.clear()
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+
+                    // SECCIÓN DE MIS RUTINAS (AHORA SECUNDARIA)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("Mis Rutinas", color = fontColor1, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                            Text("Mis Rutinas", color = fontColor1, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.width(8.dp))
                             Box(
-                                modifier = Modifier.size(24.dp).background(fontColor2, CircleShape).clickable { editingRoutine = null; showRoutineForm = true },
+                                modifier = Modifier.size(24.dp).background(fontColor2, CircleShape).clickable { navController.navigate("rutinas") },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Icon(Icons.Default.Add, null, tint = Color.Black, modifier = Modifier.size(16.dp))
                             }
                         }
                     }
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
 
-                    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        // Tarjeta Rutina Rápida (Verde)
-                        Card(
-                            modifier = Modifier.width(160.dp).height(200.dp).clickable { showAdhocDialog.value = true },
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.Black),
-                            border = BorderStroke(1.dp, fontColor2.copy(0.5f))
-                        ) {
-                            Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                                Icon(Icons.Default.FlashOn, null, tint = fontColor2, modifier = Modifier.size(40.dp))
-                                Column {
-                                    Text("Rutina", color = fontColor1, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                    Text("Rápida", color = fontColor2, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                                    Spacer(Modifier.height(4.dp))
-                                    Text("Elegi lo que tenes ganas de hacer hoy.", color = Color.Gray, fontSize = 10.sp, lineHeight = 12.sp)
-                                }
-                            }
-                        }
+                    // GRID DE RUTINAS (3 COLUMNAS)
+                    val expandedRoutines = remember { mutableStateMapOf<String, Boolean>() }
+                    Column(Modifier.fillMaxWidth()) {
+                        routinesList.chunked(3).forEach { rowRoutines ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowRoutines.forEach { routine ->
+                                    val routineExercises = routine.exerciseNames.mapNotNull { name -> allExercises.find { it.name == name } }
+                                    val isExpanded = expandedRoutines[routine.name] ?: false
 
-                        // Otras rutinas
-                        val expandedRoutines = remember { mutableStateMapOf<String, Boolean>() }
-
-                        routinesList.forEach { routine ->
-                            val routineExercises = routine.exerciseNames.mapNotNull { name -> allExercises.find { it.name == name } }
-                            val muscles = routineExercises.map { it.muscleGroup }.distinct().take(2).joinToString(", ")
-                            val totalMinutes = (routineExercises.sumOf { it.sets * 60 + (it.sets - 1) * it.rest }) / 60
-                            val isExpanded = expandedRoutines[routine.name] ?: false
-
-                            Column(Modifier.width(160.dp)) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth().height(200.dp).clickable {
-                                        expandedRoutines[routine.name] = !isExpanded
-                                    },
-                                    shape = RoundedCornerShape(20.dp),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C20))
-                                ) {
-                                    Box(Modifier.fillMaxSize()) {
-                                        // Imagen de fondo si existe
-                                        if (routine.customImageUri != null) {
-                                            val bitmap = remember(routine.customImageUri) {
-                                                try {
-                                                    context.contentResolver.openInputStream(routine.customImageUri.toUri())?.use {
-                                                        BitmapFactory.decodeStream(it)
+                                    Column(Modifier.weight(1f)) {
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth().height(100.dp).clickable {
+                                                expandedRoutines[routine.name] = !isExpanded
+                                            },
+                                            shape = RoundedCornerShape(12.dp),
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C20))
+                                        ) {
+                                            Box(Modifier.fillMaxSize()) {
+                                                // Imagen de fondo
+                                                if (routine.customImageUri != null) {
+                                                    val bitmap = remember(routine.customImageUri) {
+                                                        try {
+                                                            context.contentResolver.openInputStream(routine.customImageUri.toUri())?.use {
+                                                                BitmapFactory.decodeStream(it)
+                                                            }
+                                                        } catch (_: Exception) { null }
                                                     }
-                                                } catch (_: Exception) {
-                                                    null
+                                                    bitmap?.let {
+                                                        androidx.compose.foundation.Image(
+                                                            painter = BitmapPainter(it.asImageBitmap()),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                                            alpha = 0.4f
+                                                        )
+                                                    }
+                                                } else {
+                                                    val routineResId = context.resources.getIdentifier(routine.imageId, "drawable", context.packageName)
+                                                    if (routineResId != 0) {
+                                                        androidx.compose.foundation.Image(
+                                                            painter = androidx.compose.ui.res.painterResource(id = routineResId),
+                                                            contentDescription = null,
+                                                            modifier = Modifier.fillMaxSize(),
+                                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                                            alpha = 0.4f
+                                                        )
+                                                    }
                                                 }
-                                            }
-                                            bitmap?.let {
-                                                androidx.compose.foundation.Image(
-                                                    painter = BitmapPainter(it.asImageBitmap()),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                                    alpha = 0.6f
-                                                )
-                                            }
-                                        } else {
-                                            val routineResId = context.resources.getIdentifier(routine.imageId, "drawable", context.packageName)
-                                            if (routineResId != 0) {
-                                                androidx.compose.foundation.Image(
-                                                    painter = androidx.compose.ui.res.painterResource(id = routineResId),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.fillMaxSize(),
-                                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                                                    alpha = 0.6f
-                                                )
-                                            }
-                                        }
 
-                                        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.8f)))))
-                                        
-                                        Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
-                                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                Box(
-                                                    modifier = Modifier.size(28.dp).background(Color.Black.copy(0.6f), CircleShape).clickable { editingRoutine = routine; showRoutineForm = true },
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.size(14.dp))
-                                                }
-                                                Box(
-                                                    modifier = Modifier.size(28.dp).background(fontColor2, CircleShape).clickable {
-                                                        if (routineExercises.isNotEmpty()) {
-                                                            selectedExercises = routineExercises; currentIndex = 0; currentSet = 1; phase = 0; timeLeft = globalWait; routineStarted = true; waitingToStart = true; routineFinished = false
-                                                            currentRoutineName = routine.name
-                                                            completedExercisesIndices.clear()
+                                                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.8f)))))
+                                                
+                                                Column(Modifier.fillMaxSize().padding(6.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                                                        // Botón Editar
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(22.dp)
+                                                                .background(Color.Black.copy(0.6f), CircleShape)
+                                                                .clickable { navController.navigate("rutinas?edit=${routine.name}") },
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.size(12.dp))
                                                         }
-                                                    },
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(16.dp))
-                                                }
-                                            }
-                                        }
-
-                                        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Bottom) {
-                                            Column {
-                                                Text(routine.name, color = fontColor1, fontSize = 16.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                                Text(muscles, color = fontColor2, fontSize = 10.sp)
-                                                Spacer(Modifier.height(8.dp))
-                                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                                    Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(12.dp))
-                                                    Spacer(Modifier.width(4.dp))
-                                                    Text("$totalMinutes min", color = Color.Gray, fontSize = 10.sp)
+                                                        Spacer(Modifier.width(6.dp))
+                                                        // Botón Play
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .size(22.dp)
+                                                                .background(fontColor2, CircleShape)
+                                                                .clickable {
+                                                                    if (routineExercises.isNotEmpty()) {
+                                                                        selectedExercises = routineExercises
+                                                                        currentIndex = 0
+                                                                        currentSet = 1
+                                                                        phase = 0
+                                                                        timeLeft = globalWait
+                                                                        routineStarted = true
+                                                                        waitingToStart = true
+                                                                        routineFinished = false
+                                                                        currentRoutineName = routine.name
+                                                                        completedExercisesIndices.clear()
+                                                                    }
+                                                                },
+                                                            contentAlignment = Alignment.Center
+                                                        ) {
+                                                            Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(14.dp))
+                                                        }
+                                                    }
+                                                    Column {
+                                                        Text(routine.name, color = fontColor1, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, lineHeight = 11.sp)
+                                                        if (routine.assignedDays.isNotEmpty()) {
+                                                            val dayLabels = listOf("Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom")
+                                                            Text(
+                                                                text = routine.assignedDays.sorted().joinToString(", ") { dayLabels[it - 1] },
+                                                                color = fontColor2,
+                                                                fontSize = 7.sp,
+                                                                fontWeight = FontWeight.Medium,
+                                                                maxLines = 1,
+                                                                overflow = TextOverflow.Ellipsis
+                                                            )
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
-
+                                // Rellenar espacio si la fila no está completa
+                                repeat(3 - rowRoutines.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                            
+                            // Mostrar detalles de la rutina si alguna está expandida en esta fila
+                            rowRoutines.forEach { routine ->
+                                val isExpanded = expandedRoutines[routine.name] ?: false
                                 AnimatedVisibility(visible = isExpanded) {
-                                    Column(Modifier.fillMaxWidth().padding(top = 8.dp).background(Color.Black.copy(0.3f), RoundedCornerShape(12.dp)).padding(8.dp)) {
+                                    val routineExercises = routine.exerciseNames.mapNotNull { name -> allExercises.find { it.name == name } }
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 8.dp).background(Color.Black.copy(0.3f), RoundedCornerShape(12.dp)).padding(8.dp)) {
+                                        Text(routine.name.uppercase(), color = fontColor2, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                         routineExercises.forEach { ex ->
-                                            Text("• ${ex.name}", color = fontColor1, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                            Text("• ${ex.name}", color = fontColor1, fontSize = 9.sp, maxLines = 1)
                                         }
                                     }
                                 }
                             }
+                            Spacer(Modifier.height(8.dp))
                         }
                     }
 
                     Spacer(Modifier.height(24.dp))
 
-                    // SECCIÓN DE MIS EJERCICIOS (MODO GRID 2 COLUMNAS)
+                    // SECCIÓN DE MIS EJERCICIOS (GRID 4 COLUMNAS)
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Text("Mis Ejercicios", color = fontColor1, fontSize = 20.sp, fontWeight = FontWeight.Black)
+                        Text("Mis Ejercicios", color = fontColor1, fontSize = 20.sp, fontWeight = FontWeight.Bold)
                         Spacer(Modifier.width(8.dp))
                         Box(
-                            modifier = Modifier.size(24.dp).background(fontColor2, CircleShape).clickable { editingExercise = null; showExerciseForm = true },
+                            modifier = Modifier.size(24.dp).background(fontColor2, CircleShape).clickable { navController.navigate("ejercicios") },
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Default.Add, null, tint = Color.Black, modifier = Modifier.size(16.dp))
@@ -387,87 +471,123 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
                     val grouped = allExercises.groupBy { it.muscleGroup }
                     val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
                     
-                    grouped.forEach { (muscle, exercises) ->
-                        val isExpanded = expandedGroups[muscle] ?: false
-                        
-                        Row(
-                            Modifier.fillMaxWidth().clickable { expandedGroups[muscle] = !isExpanded }.padding(vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = muscle.uppercase(),
-                                color = fontColor2,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Black,
-                                letterSpacing = 1.sp
-                            )
-                            Icon(
-                                if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                null,
-                                tint = fontColor2,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                    Column(Modifier.fillMaxWidth()) {
+                        grouped.keys.toList().chunked(4).forEach { rowMuscles ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                rowMuscles.forEach { muscle ->
+                                    val muscleExercises = grouped[muscle] ?: emptyList()
+                                    val isExpanded = expandedGroups[muscle] ?: false
+                                    
+                                    val customImgPath = prefs.getString("muscle_img_$muscle", null)
+                                    val isRes = customImgPath?.startsWith("res:") == true
+                                    val bitmap = remember(customImgPath) { 
+                                        if (customImgPath != null && !isRes) BitmapFactory.decodeFile(customImgPath) else null 
+                                    }
+                                    
+                                    val resId = if (isRes) {
+                                        context.resources.getIdentifier(customImgPath!!.removePrefix("res:"), "drawable", context.packageName)
+                                    } else {
+                                        val imageName = muscle.lowercase().replace("í", "i").replace("é", "e").replace("á", "a").replace("ó", "o").replace("ú", "u")
+                                        context.resources.getIdentifier(imageName, "drawable", context.packageName)
+                                    }
 
-                        AnimatedVisibility(
-                            visible = isExpanded,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut()
-                        ) {
-                            Column {
-                                exercises.chunked(2).forEach { rowExercises ->
-                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        rowExercises.forEach { exercise ->
-                                            val estMinutes = (exercise.sets * 60 + (exercise.sets - 1) * exercise.rest) / 60
-
-                                            Card(
-                                                Modifier.weight(1f).padding(vertical = 4.dp).height(100.dp),
-                                                shape = RoundedCornerShape(12.dp),
-                                                colors = CardDefaults.cardColors(containerColor = Color.White.copy(0.05f)),
-                                                border = BorderStroke(0.5.dp, Color.White.copy(0.1f))
+                                    Card(
+                                        modifier = Modifier.weight(1f).height(80.dp).clickable { expandedGroups[muscle] = !isExpanded },
+                                        shape = RoundedCornerShape(10.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1C20))
+                                    ) {
+                                        Box(Modifier.fillMaxSize()) {
+                                            if (bitmap != null) {
+                                                androidx.compose.foundation.Image(
+                                                    painter = BitmapPainter(bitmap.asImageBitmap()),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                                    alpha = 0.4f
+                                                )
+                                            } else if (resId != 0) {
+                                                androidx.compose.foundation.Image(
+                                                    painter = androidx.compose.ui.res.painterResource(id = resId),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.fillMaxSize(),
+                                                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                                    alpha = 0.3f
+                                                )
+                                            }
+                                            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(0.8f)))))
+                                            
+                                            // Icono para cambiar imagen
+                                            Box(
+                                                modifier = Modifier
+                                                    .align(Alignment.TopStart)
+                                                    .padding(4.dp)
+                                                    .size(18.dp)
+                                                    .background(Color.Black.copy(0.5f), CircleShape)
+                                                    .clickable { editingMuscleForImage = muscle; showMuscleImagePicker = true },
+                                                contentAlignment = Alignment.Center
                                             ) {
-                                                Box(Modifier.fillMaxSize()) {
-                                                    Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.End) {
-                                                        Box(
-                                                            modifier = Modifier.size(24.dp).background(Color.Black.copy(0.6f), CircleShape).clickable { editingExercise = exercise; showExerciseForm = true },
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.size(12.dp))
-                                                        }
-                                                        Spacer(Modifier.width(4.dp))
-                                                        Box(
-                                                            modifier = Modifier.size(24.dp).background(fontColor2, CircleShape).clickable {
-                                                                selectedExercises = listOf(exercise); currentIndex = 0; currentSet = 1; phase = 0; timeLeft = globalWait; routineStarted = true; waitingToStart = true; routineFinished = false
-                                                                currentRoutineName = exercise.name
-                                                                completedExercisesIndices.clear()
-                                                            },
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(14.dp))
-                                                        }
-                                                    }
+                                                Icon(Icons.Default.PhotoCamera, null, tint = Color.White.copy(0.8f), modifier = Modifier.size(10.dp))
+                                            }
 
-                                                    Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                                                        Text(exercise.name, color = fontColor1, fontSize = 13.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.6f))
-                                                        
-                                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                                                            Text("${exercise.sets}x${exercise.reps} — ${exercise.weight}kg", color = fontColor2, fontSize = 10.sp, fontWeight = FontWeight.Black)
-                                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                                Icon(Icons.Default.Timer, null, tint = Color.Gray, modifier = Modifier.size(10.dp))
-                                                                Spacer(Modifier.width(2.dp))
-                                                                Text("${estMinutes}m", color = Color.Gray, fontSize = 10.sp)
-                                                            }
-                                                        }
-                                                    }
+                                            Column(Modifier.fillMaxSize().padding(4.dp), verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text(muscle.uppercase(), color = fontColor1, fontSize = 8.sp, fontWeight = FontWeight.Black, maxLines = 1, textAlign = TextAlign.Center)
+                                                Text("${muscleExercises.size}", color = fontColor2, fontSize = 8.sp)
+                                            }
+                                        }
+                                    }
+                                }
+                                repeat(4 - rowMuscles.size) { Spacer(Modifier.weight(1f)) }
+                            }
+
+                            // Detalles del grupo muscular
+                            rowMuscles.forEach { muscle ->
+                                val isExpanded = expandedGroups[muscle] ?: false
+                                AnimatedVisibility(visible = isExpanded) {
+                                    val muscleExercises = grouped[muscle] ?: emptyList()
+                                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp).background(Color.Black.copy(0.3f), RoundedCornerShape(10.dp)).padding(6.dp)) {
+                                        Text(muscle.uppercase(), color = fontColor2, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                        muscleExercises.forEach { ex ->
+                                            Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                                                Text(ex.name, color = fontColor1, fontSize = 9.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                                                
+                                                // Botón Editar Ejercicio
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(20.dp)
+                                                        .background(Color.White.copy(0.1f), CircleShape)
+                                                        .clickable { editingExercise = ex; showExerciseForm = true },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(Icons.Default.Edit, null, tint = Color.Gray.copy(0.8f), modifier = Modifier.size(10.dp))
+                                                }
+                                                Spacer(Modifier.width(4.dp))
+                                                // Botón Play Ejercicio
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(20.dp)
+                                                        .background(fontColor2, CircleShape)
+                                                        .clickable {
+                                                            selectedExercises = listOf(ex)
+                                                            currentIndex = 0
+                                                            currentSet = 1
+                                                            phase = 0
+                                                            timeLeft = globalWait
+                                                            routineStarted = true
+                                                            waitingToStart = true
+                                                            routineFinished = false
+                                                            currentRoutineName = ex.name
+                                                            completedExercisesIndices.clear()
+                                                        },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(Icons.Default.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(12.dp))
                                                 }
                                             }
                                         }
-                                        if (rowExercises.size == 1) Spacer(Modifier.weight(1f))
                                     }
                                 }
-                                Spacer(Modifier.height(12.dp))
                             }
+                            Spacer(Modifier.height(8.dp))
                         }
                     }
                     Spacer(Modifier.height(32.dp))
@@ -707,65 +827,90 @@ fun MainScreen(navController: NavController, viewModel: GymViewModel) {
         }
     }
 
-    if (showRoutineForm) {
-        Dialog(onDismissRequest = { showRoutineForm = false }) {
-            Surface(
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f),
-                shape = RoundedCornerShape(24.dp),
-                color = Color(0xFF1A1C20)
-            ) {
-                Column(Modifier.padding(20.dp)) {
-                    RoutineForm(
-                        allExercises = allExercises,
-                        initialRoutine = editingRoutine,
-                        onCancel = { showRoutineForm = false },
-                        onDelete = {
-                            editingRoutine?.let { viewModel.deleteRoutine(it.name) }
-                            showRoutineForm = false
-                        },
-                        onSave = { routine ->
-                            if (editingRoutine != null && editingRoutine!!.name != routine.name) {
-                                viewModel.deleteRoutine(editingRoutine!!.name)
+    if (showMuscleImagePicker && editingMuscleForImage != null) {
+        AlertDialog(
+            onDismissRequest = { showMuscleImagePicker = false },
+            title = { Text("Imagen para $editingMuscleForImage", color = Color.White) },
+            text = {
+                Column(Modifier.fillMaxWidth()) {
+                    TextButton(onClick = { muscleImageLauncher.launch("image/*"); showMuscleImagePicker = false }) {
+                        Text("ELEGIR DE GALERÍA", color = fontColor2)
+                    }
+                    TextButton(onClick = { 
+                        prefs.edit { remove("muscle_img_$editingMuscleForImage") }
+                        showMuscleImagePicker = false 
+                    }) {
+                        Text("RESTAURAR POR DEFECTO", color = Color.Red)
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Text("Predefinidas:", color = Color.Gray, fontSize = 12.sp)
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(imageOptions) { option ->
+                            val optResId = context.resources.getIdentifier(option.first, "drawable", context.packageName)
+                            Card(
+                                modifier = Modifier.size(70.dp).clickable {
+                                    prefs.edit { putString("muscle_img_$editingMuscleForImage", "res:${option.first}") }
+                                    showMuscleImagePicker = false
+                                },
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Box {
+                                    if (optResId != 0) {
+                                        androidx.compose.foundation.Image(
+                                            painter = painterResource(id = optResId), 
+                                            contentDescription = null,
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop, 
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                    Text(
+                                        option.second, 
+                                        color = Color.White, 
+                                        fontSize = 8.sp, 
+                                        modifier = Modifier.align(Alignment.BottomCenter).background(Color.Black.copy(0.7f)).fillMaxWidth(), 
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
-                            viewModel.addRoutine(com.example.Gym_App.model.RoutineEntity(routine.name, routine.exerciseNames.joinToString(","), routine.imageId, routine.customImageUri))
-                            showRoutineForm = false
                         }
-                    )
+                    }
                 }
-            }
-        }
+            },
+            confirmButton = { TextButton(onClick = { showMuscleImagePicker = false }) { Text("CERRAR", color = Color.Gray) } },
+            containerColor = Color(0xFF1A1C20)
+        )
     }
 
     if (showExerciseForm) {
-        Dialog(onDismissRequest = { showExerciseForm = false }) {
-            Surface(
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.9f),
-                shape = RoundedCornerShape(24.dp),
-                color = Color(0xFF1A1C20)
-            ) {
-                Column(Modifier.padding(20.dp)) {
-                    val muscleGroups = listOf("Pecho", "Espalda", "Piernas", "Hombros", "Brazos", "Core")
-                    ExerciseForm(
-                        isEditMode = editingExercise != null,
-                        initial = editingExercise,
-                        existingMuscles = muscleGroups,
-                        onCancel = { showExerciseForm = false },
-                        onDelete = {
-                            editingExercise?.let { viewModel.deleteExercise(it.name) }
-                            showExerciseForm = false
-                        },
-                        onSave = { ex ->
-                            viewModel.addExercise(com.example.Gym_App.model.ExerciseEntity(
-                                ex.name, ex.reps, ex.sets, ex.weight, ex.rest, ex.duration, ex.muscleGroup,
-                                lastUpdateDate = System.currentTimeMillis()
-                            ))
-                            showExerciseForm = false
-                        }
-                    )
-                }
+        ExerciseForm(
+            isEditMode = editingExercise != null,
+            initial = editingExercise,
+            existingMuscles = muscleGroups,
+            onCancel = { showExerciseForm = false; editingExercise = null },
+            onDelete = {
+                editingExercise?.let { viewModel.deleteExercise(it.name) }
+                showExerciseForm = false; editingExercise = null
+            },
+            onSave = { updatedEx ->
+                val original = allExercisesEntity.find { it.name == (editingExercise?.name ?: "") }
+                val now = System.currentTimeMillis()
+                val lastUpdate = if (original != null && (original.weight != updatedEx.weight || original.reps != updatedEx.reps || original.sets != updatedEx.sets)) now else (original?.lastUpdateDate ?: 0L)
+
+                viewModel.addExercise(ExerciseEntity(
+                    updatedEx.name, updatedEx.reps, updatedEx.sets,
+                    updatedEx.weight, updatedEx.rest, updatedEx.duration, updatedEx.muscleGroup,
+                    original?.equipmentType ?: "Peso Corporal",
+                    updateReminderDays = updatedEx.updateReminderDays,
+                    lastUpdateDate = lastUpdate
+                ))
+                showExerciseForm = false; editingExercise = null
             }
-        }
+        )
     }
+
 }
 
 @Composable
@@ -1035,7 +1180,7 @@ fun TrainingUI(
                 IconButton(onClick = onFinish, modifier = Modifier.size(44.dp).background(Color.White.copy(0.1f), CircleShape)) {
                     Icon(Icons.Default.PlayArrow, null, tint = Color.White)
                 }
-                IconButton(onClick = onSkipExercise, modifier = Modifier.size(44.dp).background(Color.White.copy(0.1f), CircleShape)) {
+                IconButton(onClick = { onSkipExercise() }, modifier = Modifier.size(44.dp).background(Color.White.copy(0.1f), CircleShape)) {
                     Icon(Icons.Default.SkipNext, null, tint = Color.White)
                 }
             }

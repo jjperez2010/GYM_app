@@ -77,7 +77,7 @@ interface GymDao {
 data class VolumeStat(val date: Long, val totalVolume: Int)
 data class MaxWeightStat(val exerciseName: String, val maxWeight: Int)
 
-@Database(entities = [ExerciseEntity::class, RoutineEntity::class, WorkoutHistoryEntity::class, WeightEntity::class], version = 7)
+@Database(entities = [ExerciseEntity::class, RoutineEntity::class, WorkoutHistoryEntity::class, WeightEntity::class], version = 10)
 abstract class GymDatabase : RoomDatabase() {
     abstract fun gymDao(): GymDao
 

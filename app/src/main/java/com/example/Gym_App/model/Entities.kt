@@ -22,7 +22,8 @@ data class RoutineEntity(
     @PrimaryKey val name: String,
     val exerciseNames: String, // CSV of exercise names
     val imageId: String = "default", // Nombre identificador de la imagen (pecho, espalda, etc.)
-    val customImageUri: String? = null
+    val customImageUri: String? = null,
+    val assignedDays: String? = null // CSV of days (1-7), null for not assigned
 )
 
 @Entity(tableName = "workout_history")

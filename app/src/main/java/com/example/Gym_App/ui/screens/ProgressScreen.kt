@@ -34,6 +34,7 @@ fun ProgressScreen(navController: NavController, viewModel: GymViewModel) {
     val selectedGradientColor = prefs.getInt("trainingGradientColor", Color(0xFF424242).toArgb())
     
     val history by viewModel.history.collectAsState()
+    val workoutDates by viewModel.workoutDates.collectAsState()
     val weightHistory by viewModel.weightHistory.collectAsState()
     val analytics by viewModel.analyticsStats.collectAsState()
     val muscleStats by viewModel.muscleStats.collectAsState()
@@ -50,6 +51,17 @@ fun ProgressScreen(navController: NavController, viewModel: GymViewModel) {
             
             HeaderSection(comparisonMode, showWeeklyComparison, onCompare = { comparisonMode = !comparisonMode }, onWeekly = { showWeeklyComparison = !showWeeklyComparison })
             
+            Spacer(Modifier.height(16.dp))
+
+            // CALENDARIO DE CONSISTENCIA (MOVIDO DESDE HOME)
+            ConsistencyCalendar(
+                workoutDates = workoutDates,
+                workoutHistory = history,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(24.dp))
+
             MonthSelector(selectedMonth) { selectedMonth = it }
 
             Spacer(Modifier.height(16.dp))
